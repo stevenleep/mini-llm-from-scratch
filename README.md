@@ -1,5 +1,7 @@
 # mini-llm-from-scratch
 
+**English** | [简体中文](README.zh.md)
+
 Minimal, **zero-dependency** implementation of a character-level decoder-only Transformer (GPT-style) in JavaScript. Training, weight export, CLI decoding, and a local web UI with Server-Sent Events streaming are supported; all computation runs on the host machine without external services.
 
 | | |
@@ -12,7 +14,7 @@ Minimal, **zero-dependency** implementation of a character-level decoder-only Tr
 
 ## Features
 
-**Full inventory of current behavior** (endpoints, env vars, file roles): **[docs/FEATURES.md](docs/FEATURES.md)**.
+**Full inventory of current behavior** (endpoints, env vars, file roles): **[docs/FEATURES.md](docs/FEATURES.md)** · [中文版 / Chinese](docs/FEATURES.zh.md)
 
 | Component | Description |
 | :--- | :--- |
@@ -138,7 +140,9 @@ To replicate a reported experiment: record Node.js version, Git commit (manually
 
 ```
 docs/
-  FEATURES.md     Inventory of implemented behavior
+  FEATURES.md     Implemented features (EN)
+  FEATURES.zh.md  Implemented features (中文)
+README.zh.md      This readme (简体中文)
 src/
   config.js       Hyperparameters
   train.js        Training loop and export

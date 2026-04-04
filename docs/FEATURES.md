@@ -1,5 +1,7 @@
 # Implemented features
 
+**English** | [中文版](FEATURES.zh.md)
+
 **中文说明：** 本文档列出仓库**当前已实现**的行为与入口，便于对照代码与写实验记录。未列入项视为未实现或仅存在于 Roadmap。
 
 ---
