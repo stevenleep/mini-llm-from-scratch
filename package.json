@@ -1,0 +1,13 @@
+{
+  "name": "mini-llm-from-scratch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "教学用最小语言模型。阅读顺序：src/读我.txt → src/调用顺序.txt",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "train": "node src/train.js"
+  }
+}
