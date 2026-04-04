@@ -42,6 +42,8 @@
  * VERBOSE          设为 1 时每一步打印 input/target（很慢，仅调试）。
  * STEPS            覆盖训练步数（正整数），方便快速试跑，例如 STEPS=50。
  * GRAD_CLIP        梯度裁剪上限，默认 1；设为 0 表示不裁剪。
+ * VAL_FRACTION     验证集占语料 token 比例（默认 0.08，尾部划出；语料过短则自动关闭验证）。
+ * VAL_SAMPLES      验证时在验证集上随机采样的窗口数（默认 24，固定种子下可复现）。
  *
  * =============================================================================
  * train.js —— 直接运行这个文件，就会按「调用顺序.txt」里的大顺序练模型
@@ -119,6 +121,49 @@ const clipGradNorm = (params, maxNorm) => {
 };
 
 /**
+ * 从尾部划出一段 token 作验证集；语料太短则返回整段训练、无验证。
+ * @param {Uint32Array} data
+ * @param {number} seqLen
+ * @param {number} valFraction 0~0.5
+ */
+const splitTrainVal = (data, seqLen, valFraction) => {
+  const minW = seqLen + 1;
+  if (data.length < 2 * minW) {
+    return { train: data, val: null };
+  }
+  let valLen = Math.floor(data.length * valFraction);
+  valLen = Math.max(minW, valLen);
+  const trainLen = data.length - valLen;
+  if (trainLen < minW) {
+    return { train: data, val: null };
+  }
+  return {
+    train: data.subarray(0, trainLen),
+    val: data.subarray(trainLen),
+  };
+};
+
+/**
+ * 在 buffer 上随机采样若干窗口，平均交叉熵（不做 backward，用于验证集）。
+ */
+const meanLossSampled = (model, buf, seqLen, nSamples, rng) => {
+  const maxStart = buf.length - seqLen - 1;
+  if (maxStart < 0) return null;
+  const n = Math.min(Math.max(1, nSamples), maxStart + 1);
+  let total = 0;
+  for (let s = 0; s < n; s++) {
+    const start = Math.floor(rng() * (maxStart + 1));
+    const chunk = buf.subarray(start, start + seqLen + 1);
+    const input = chunk.subarray(0, seqLen);
+    const target = chunk.subarray(1, seqLen + 1);
+    const logits = model.forward(input);
+    const loss = crossEntropyMean(logits, target);
+    total += loss.data[0];
+  }
+  return total / n;
+};
+
+/**
  * 主流程（和「调用顺序.txt」第 1、2 节一一对应）：
  * 建字表 → 编码文章 → 建模型 → 循环：取样 → forward → 算错多少 → 往回算 → 改表
  */
@@ -145,6 +190,24 @@ const main = () => {
     seqLen: Math.min(baseCfg.seqLen, data.length - 1),
   };
 
+  const valFraction = Math.min(0.5, Math.max(0, parseFloat(process.env.VAL_FRACTION ?? '0.08')));
+  const valSamples = Math.max(1, parseInt(process.env.VAL_SAMPLES ?? '24', 10) || 24);
+  const { train: trainData, val: valData } = splitTrainVal(data, cfg.seqLen, valFraction);
+  if (valData) {
+    console.log(
+      '[验证] 尾部 hold-out · VAL_FRACTION=',
+      valFraction,
+      '· train tokens',
+      trainData.length,
+      '· val tokens',
+      valData.length,
+      '· VAL_SAMPLES=',
+      valSamples,
+    );
+  } else {
+    console.log('[验证] 语料过短，跳过 hold-out（仅用训练采样）');
+  }
+
   /** rng：random number generator，随机数发生器；用来给模型里各张表填初始随机小数。 */
   const rng = mulberry32(cfg.seed);
   const model = new MiniGPT(cfg, rng);
@@ -154,10 +217,10 @@ const main = () => {
   console.log('词表大小', cfg.vocabSize, 'seqLen', cfg.seqLen, '步数', cfg.steps);
 
   for (let step = 0; step < cfg.steps; step++) {
-    const maxStart = data.length - cfg.seqLen - 1;
+    const maxStart = trainData.length - cfg.seqLen - 1;
     const start = Math.floor(dataRng() * (maxStart + 1));
     /** chunk：从整段编号里切出「窗口长度 + 1」的一小段（多 1 个才能错位成答案）。 */
-    const chunk = data.subarray(start, start + cfg.seqLen + 1);
+    const chunk = trainData.subarray(start, start + cfg.seqLen + 1);
     /** input：喂给模型的输入编号；target：每个位置对应的「下一个正确字」的编号。 */
     const input = chunk.subarray(0, cfg.seqLen);
     const target = chunk.subarray(1, cfg.seqLen + 1);
@@ -180,7 +243,16 @@ const main = () => {
 
     const logEvery = Math.max(40, Math.floor(cfg.steps / 20));
     if (step % logEvery === 0 || step === cfg.steps - 1) {
-      console.log(`step ${step}  loss ${loss.data[0].toFixed(4)}`);
+      let extra = '';
+      if (valData) {
+        const valRng = mulberry32((cfg.seed + 424242) >>> 0);
+        const vLoss = meanLossSampled(model, valData, cfg.seqLen, valSamples, valRng);
+        if (vLoss !== null) {
+          const ppl = Math.exp(vLoss);
+          extra = `  val_loss ${vLoss.toFixed(4)}  val_ppl ${ppl.toFixed(2)}`;
+        }
+      }
+      console.log(`step ${step}  train_loss ${loss.data[0].toFixed(4)}${extra}`);
     }
   }
 
