@@ -8,6 +8,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "train": "node src/train.js"
+    "train": "node src/train.js",
+    "build": "node src/train.js",
+    "infer": "node src/infer.js"
   }
 }

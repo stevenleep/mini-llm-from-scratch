@@ -30,6 +30,13 @@
  * loss             损失：错多少。
  * backward         往回传梯度（算每个参数该怎么改）。
  * console.log      在终端打印一行字。
+ * writeHfModelDir  把模型存成「一个文件夹」：config、词表、分词器说明、model.safetensors，以及纯二进制的 model.bin + 清单（和网上常见摆法类似）。
+ * writeMiniGPTFile 把模型存成「一个大 JSON」，老格式，单文件好拷贝。
+ * EXPORT_DIR       环境变量：只改「HF 风格文件夹」写到哪里，默认 ./out/export/hf-style。
+ * EXPORT_PATH      环境变量：只改「单文件 JSON」写到哪里，默认 ./out/export/json-single/model.mgpt.json。
+ *                  两种产物分开放：都在 out/export/ 下，hf-style 与 json-single 各一档，不混在一个目录里。
+ *                  训练正常跑完后会两种格式各导出一份（除非设 SKIP_EXPORT=1 不写盘）。
+ * SKIP_EXPORT      环境变量：设为 1 时跳过导出（只想快速试跑、不落盘时）。
  *
  * =============================================================================
  * train.js —— 直接运行这个文件，就会按「调用顺序.txt」里的大顺序练模型
@@ -66,6 +73,13 @@ import { defaultConfig } from './config.js';
 import { buildCharTokenizer } from './data/charTokenizer.js';
 import { MiniGPT, mulberry32 } from './model/MiniGPT.js';
 import { crossEntropyMean } from './tensor/ops.js';
+import { writeHfModelDir } from './io/hfModelDir.js';
+import { writeMiniGPTFile } from './io/miniGptIO.js';
+
+/** 默认：HF 风格整包（config / vocab / tokenizer_config / safetensors / model.bin …），单独一档 */
+const DEFAULT_EXPORT_HF_DIR = './out/export/hf-style';
+/** 默认：单文件 JSON 整包，放在 json-single 子目录里，不和 hf-style 混放 */
+const DEFAULT_EXPORT_JSON_PATH = './out/export/json-single/model.mgpt.json';
 
 /**
  * CORPUS（读作「科普斯」，英文原意是「语料库」）
@@ -151,6 +165,18 @@ const main = () => {
   }
 
   console.log('完成。可继续：增大语料、加 LayerNorm、Adam、多 batch。');
+
+  // 两种导出：out/export/hf-style（常见目录结构）与 out/export/json-single（单文件）。可用 EXPORT_DIR / EXPORT_PATH 覆盖；SKIP_EXPORT=1 不写盘。
+  if (process.env.SKIP_EXPORT === '1') {
+    console.log('已跳过导出（SKIP_EXPORT=1）。');
+  } else {
+    const hfDir = process.env.EXPORT_DIR ?? DEFAULT_EXPORT_HF_DIR;
+    const jsonPath = process.env.EXPORT_PATH ?? DEFAULT_EXPORT_JSON_PATH;
+    writeHfModelDir(model, cfg, tok, hfDir);
+    writeMiniGPTFile(model, cfg, tok, jsonPath);
+    console.log('已导出 → HF 风格目录:', hfDir);
+    console.log('         单文件 JSON :', jsonPath);
+  }
 };
 
 main();

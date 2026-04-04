@@ -68,3 +68,41 @@ export const buildCharTokenizer = (text) => {
     itos,
   };
 };
+
+/**
+ * 从「保存下来的字表」恢复分词器（和 buildCharTokenizer 用起来一样）。
+ * itos 就是「第 0 号是什么字、第 1 号是什么字…」的列表，必须和训练导出时完全一致，不能少字、不能重复。
+ */
+export const tokenizerFromItos = (itos) => {
+  if (!Array.isArray(itos) || itos.length === 0) {
+    throw new Error('字表 itos 必须是非空数组');
+  }
+  /** @type {Record<string, number>} */
+  const stoi = {};
+  for (let i = 0; i < itos.length; i++) {
+    const c = itos[i];
+    if (stoi[c] !== undefined) throw new Error(`字表里同一个字出现了两次: ${c}`);
+    stoi[c] = i;
+  }
+  const encode = (s) => {
+    const out = new Uint32Array(s.length);
+    for (let i = 0; i < s.length; i++) {
+      const idx = stoi[s[i]];
+      if (idx === undefined) throw new Error(`未知字符: ${s[i]}`);
+      out[i] = idx;
+    }
+    return out;
+  };
+  const decode = (ids) => {
+    let s = '';
+    for (let i = 0; i < ids.length; i++) s += itos[ids[i]];
+    return s;
+  };
+  return {
+    vocabSize: itos.length,
+    encode,
+    decode,
+    stoi,
+    itos,
+  };
+};
