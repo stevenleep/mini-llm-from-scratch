@@ -44,6 +44,7 @@
  * GRAD_CLIP        梯度裁剪上限，默认 1；设为 0 表示不裁剪。
  * VAL_FRACTION     验证集占语料 token 比例（默认 0.08，尾部划出；语料过短则自动关闭验证）。
  * VAL_SAMPLES      验证时在验证集上随机采样的窗口数（默认 24，固定种子下可复现）。
+ * METRICS_CSV      训练指标追加写入的 CSV 路径（默认 ./out/train_metrics.csv）；SKIP_METRICS=1 关闭。
  *
  * =============================================================================
  * train.js —— 直接运行这个文件，就会按「调用顺序.txt」里的大顺序练模型
@@ -75,6 +76,9 @@
  * ③ loss.backward()：根据错多少，往回算每张权重表每个格子该怎么动（tensor/Tensor.js + ops 里各 _backward）。
  * ④ sgdStep：真的改权重。
  */
+
+import { appendFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import path from 'node:path';
 
 import { defaultConfig, funTrainingPreset } from './config.js';
 import { buildCharTokenizer } from './data/charTokenizer.js';
@@ -164,6 +168,21 @@ const meanLossSampled = (model, buf, seqLen, nSamples, rng) => {
 };
 
 /**
+ * 追加一行指标（step, train_loss, val_loss, val_ppl）；文件不存在或为空时写表头。
+ */
+const appendMetricsCsv = (csvPath, step, trainLoss, valLoss, valPpl) => {
+  const dir = path.dirname(csvPath);
+  mkdirSync(dir, { recursive: true });
+  const needHeader = !existsSync(csvPath) || statSync(csvPath).size === 0;
+  if (needHeader) {
+    appendFileSync(csvPath, 'step,train_loss,val_loss,val_ppl\n', 'utf8');
+  }
+  const v = valLoss == null ? '' : String(valLoss);
+  const p = valPpl == null ? '' : String(valPpl);
+  appendFileSync(csvPath, `${step},${trainLoss},${v},${p}\n`, 'utf8');
+};
+
+/**
  * 主流程（和「调用顺序.txt」第 1、2 节一一对应）：
  * 建字表 → 编码文章 → 建模型 → 循环：取样 → forward → 算错多少 → 往回算 → 改表
  */
@@ -208,6 +227,12 @@ const main = () => {
     console.log('[验证] 语料过短，跳过 hold-out（仅用训练采样）');
   }
 
+  const metricsCsv = process.env.METRICS_CSV ?? './out/train_metrics.csv';
+  const skipMetrics = process.env.SKIP_METRICS === '1';
+  if (!skipMetrics) {
+    console.log('[指标] CSV →', path.resolve(metricsCsv), '（SKIP_METRICS=1 可关闭）');
+  }
+
   /** rng：random number generator，随机数发生器；用来给模型里各张表填初始随机小数。 */
   const rng = mulberry32(cfg.seed);
   const model = new MiniGPT(cfg, rng);
@@ -243,16 +268,21 @@ const main = () => {
 
     const logEvery = Math.max(40, Math.floor(cfg.steps / 20));
     if (step % logEvery === 0 || step === cfg.steps - 1) {
-      let extra = '';
+      let vLoss = null;
+      let ppl = null;
       if (valData) {
         const valRng = mulberry32((cfg.seed + 424242) >>> 0);
-        const vLoss = meanLossSampled(model, valData, cfg.seqLen, valSamples, valRng);
-        if (vLoss !== null) {
-          const ppl = Math.exp(vLoss);
-          extra = `  val_loss ${vLoss.toFixed(4)}  val_ppl ${ppl.toFixed(2)}`;
-        }
+        vLoss = meanLossSampled(model, valData, cfg.seqLen, valSamples, valRng);
+        if (vLoss !== null) ppl = Math.exp(vLoss);
       }
+      const extra =
+        vLoss !== null && ppl !== null
+          ? `  val_loss ${vLoss.toFixed(4)}  val_ppl ${ppl.toFixed(2)}`
+          : '';
       console.log(`step ${step}  train_loss ${loss.data[0].toFixed(4)}${extra}`);
+      if (!skipMetrics) {
+        appendMetricsCsv(metricsCsv, step, loss.data[0], vLoss, ppl);
+      }
     }
   }
 
