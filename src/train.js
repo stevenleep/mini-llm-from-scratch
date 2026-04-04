@@ -37,6 +37,11 @@
  *                  两种产物分开放：都在 out/export/ 下，hf-style 与 json-single 各一档，不混在一个目录里。
  *                  训练正常跑完后会两种格式各导出一份（除非设 SKIP_EXPORT=1 不写盘）。
  * SKIP_EXPORT      环境变量：设为 1 时跳过导出（只想快速试跑、不落盘时）。
+ * CORPUS_PATH      语料文件路径（相对项目根目录）；默认 data/corpus/playful_zh.txt。
+ * FUN_TRAIN        设为 1 时使用 funTrainingPreset（更多步数、更长 seqLen、略降 lr）。
+ * VERBOSE          设为 1 时每一步打印 input/target（很慢，仅调试）。
+ * STEPS            覆盖训练步数（正整数），方便快速试跑，例如 STEPS=50。
+ * GRAD_CLIP        梯度裁剪上限，默认 1；设为 0 表示不裁剪。
  *
  * =============================================================================
  * train.js —— 直接运行这个文件，就会按「调用顺序.txt」里的大顺序练模型
@@ -69,8 +74,9 @@
  * ④ sgdStep：真的改权重。
  */
 
-import { defaultConfig } from './config.js';
+import { defaultConfig, funTrainingPreset } from './config.js';
 import { buildCharTokenizer } from './data/charTokenizer.js';
+import { loadCorpus } from './data/loadCorpus.js';
 import { MiniGPT, mulberry32 } from './model/MiniGPT.js';
 import { crossEntropyMean } from './tensor/ops.js';
 import { writeHfModelDir } from './io/hfModelDir.js';
@@ -80,18 +86,6 @@ import { writeMiniGPTFile } from './io/miniGptIO.js';
 const DEFAULT_EXPORT_HF_DIR = './out/export/hf-style';
 /** 默认：单文件 JSON 整包，放在 json-single 子目录里，不和 hf-style 混放 */
 const DEFAULT_EXPORT_JSON_PATH = './out/export/json-single/model.mgpt.json';
-
-/**
- * CORPUS（读作「科普斯」，英文原意是「语料库」）
- * —— 这里指：用来训练的一整段示例文章（字符串）。
- * 程序会从里面统计有哪些字、给每个字编号，再反复截取小段来练「猜下一个字」。
- * 你换成自己的长文章也可以，只要还是普通文本。
- */
-const CORPUS = `
-在最小实现里，一条训练样本是：输入长度为 T 的 token 序列，
-让模型在每个位置预测下一个 token。反向传播从平均交叉熵开始，
-沿计算图回到词嵌入与所有线性层。这里没有 LayerNorm，仅用于演示核心数据流。
-`.trim();
 
 /**
  * sgdStep：名字里 sgd 是「随机梯度下降」的英文缩写（一种最简单的改权重方式）。
@@ -107,11 +101,37 @@ const sgdStep = (params, lr) => {
   }
 };
 
+/** 梯度整体范数超过 maxNorm 时按比例缩小，训练更稳、loss 不那么乱跳。GRAD_CLIP=0 关闭。 */
+const clipGradNorm = (params, maxNorm) => {
+  if (!maxNorm || maxNorm <= 0) return;
+  let sum = 0;
+  for (const p of params) {
+    if (!p.grad) continue;
+    for (let i = 0; i < p.grad.length; i++) sum += p.grad[i] * p.grad[i];
+  }
+  const norm = Math.sqrt(sum);
+  if (norm <= maxNorm || norm === 0) return;
+  const scale = maxNorm / norm;
+  for (const p of params) {
+    if (!p.grad) continue;
+    for (let i = 0; i < p.grad.length; i++) p.grad[i] *= scale;
+  }
+};
+
 /**
  * 主流程（和「调用顺序.txt」第 1、2 节一一对应）：
  * 建字表 → 编码文章 → 建模型 → 循环：取样 → forward → 算错多少 → 往回算 → 改表
  */
 const main = () => {
+  const CORPUS = loadCorpus();
+  const useFun = process.env.FUN_TRAIN === '1';
+  const baseCfg = useFun ? { ...defaultConfig, ...funTrainingPreset } : { ...defaultConfig };
+  if (process.env.STEPS) {
+    const n = parseInt(process.env.STEPS, 10);
+    if (!Number.isNaN(n) && n > 0) baseCfg.steps = n;
+  }
+  if (useFun) console.log('[训练] FUN_TRAIN=1：加长步数 / 上下文，lr=', baseCfg.lr, 'steps=', baseCfg.steps);
+
   /** tok：tokenizer 的缩写 = 分词/编码器；这里负责「字 ↔ 编号」。 */
   const tok = buildCharTokenizer(CORPUS);
 
@@ -120,9 +140,9 @@ const main = () => {
 
   /** cfg：config 的缩写 = 配置；把默认旋钮和本语料的词表大小、实际可用的 seqLen 合在一起。 */
   const cfg = {
-    ...defaultConfig,
+    ...baseCfg,
     vocabSize: tok.vocabSize,
-    seqLen: Math.min(defaultConfig.seqLen, data.length - 1),
+    seqLen: Math.min(baseCfg.seqLen, data.length - 1),
   };
 
   /** rng：random number generator，随机数发生器；用来给模型里各张表填初始随机小数。 */
@@ -142,13 +162,11 @@ const main = () => {
     const input = chunk.subarray(0, cfg.seqLen);
     const target = chunk.subarray(1, cfg.seqLen + 1);
 
-    console.log('--------------------------------');
-    console.log("  ")
-    console.log('input -->', input, tok.decode(input));
-    
-    console.log('--------------------------------');
-    console.log("  ")
-    console.log('target -->', target, tok.decode(target));
+    if (process.env.VERBOSE === '1') {
+      console.log('--------------------------------');
+      console.log('input -->', tok.decode(input));
+      console.log('target -->', tok.decode(target));
+    }
 
     // ① 打分表 logits[T×词表大小]：第 i 行 = 「看到 input 里第 0..i 个字后，对下一个字」给每个候选字的 raw 分（见 MiniGPT.forward → lmHead）
     const logits = model.forward(input);
@@ -156,10 +174,12 @@ const main = () => {
     const loss = crossEntropyMean(logits, target);
     // ③ 往回算每个权重「该怎么改」
     loss.backward();
-    // ④ 真的改
+    const clip = process.env.GRAD_CLIP === '0' ? 0 : parseFloat(process.env.GRAD_CLIP ?? '1');
+    clipGradNorm(model.parameters(), clip);
     sgdStep(model.parameters(), cfg.lr);
 
-    if (step % 40 === 0 || step === cfg.steps - 1) {
+    const logEvery = Math.max(40, Math.floor(cfg.steps / 20));
+    if (step % logEvery === 0 || step === cfg.steps - 1) {
       console.log(`step ${step}  loss ${loss.data[0].toFixed(4)}`);
     }
   }

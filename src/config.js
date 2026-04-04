@@ -40,3 +40,13 @@ export const defaultConfig = {
   steps: 200,
   seed: 42,
 };
+
+/**
+ * 语料较长、想「多练一会」时用：环境变量 FUN_TRAIN=1 会与 defaultConfig 合并。
+ * 步数更多、上下文更长、学习率略降，更稳一点。
+ */
+export const funTrainingPreset = {
+  seqLen: 96,
+  lr: 0.016,
+  steps: 800,
+};

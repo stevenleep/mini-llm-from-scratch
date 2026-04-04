@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MiniGPT · 本地续写</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- 8px 基准可见网格：数学对齐参考 -->
+    <div class="grid-overlay" aria-hidden="true"></div>
+
+    <div class="layout">
+      <header class="masthead">
+        <div class="masthead__meta">mini-llm-from-scratch</div>
+        <h1 class="masthead__title">本地字符模型</h1>
+        <p class="masthead__rule" role="presentation"></p>
+        <p class="masthead__lede">
+          采样带 top-p 与重复惩罚，减轻死循环单字；温度略降默认更稳。数据不离开本机。
+        </p>
+      </header>
+
+      <main class="panel">
+        <div class="grid-12">
+          <div class="span-12 field-block">
+            <label class="label" for="prompt">提示</label>
+            <textarea id="prompt" rows="4" placeholder="输入开头，例如：在最小实现里"></textarea>
+          </div>
+
+          <div class="span-4 field-block">
+            <label class="label" for="maxNewTokens">续写字数 <output id="outMax">64</output></label>
+            <input type="range" id="maxNewTokens" min="1" max="256" value="64" />
+          </div>
+          <div class="span-4 field-block">
+            <label class="label" for="temperature">温度 <output id="outTemp">0.75</output></label>
+            <input type="range" id="temperature" min="0" max="200" value="75" />
+          </div>
+          <div class="span-4 field-block">
+            <label class="label" for="topK">Top-k <output id="outTopK">50</output></label>
+            <input type="range" id="topK" min="0" max="200" value="50" />
+          </div>
+
+          <div class="span-6 field-block">
+            <label class="label" for="topP">Top-p（nucleus，1=关）</label>
+            <input type="number" id="topP" value="0.92" min="0.5" max="1" step="0.01" />
+          </div>
+          <div class="span-6 field-block">
+            <label class="label" for="repetitionPenalty">重复惩罚</label>
+            <input type="number" id="repetitionPenalty" value="1.12" min="1" max="1.5" step="0.02" />
+          </div>
+
+          <div class="span-12 row-inline">
+            <label class="check"><input type="checkbox" id="greedy" /> 贪心（argmax）</label>
+            <span class="stream-hint">续写以流式推送，逐字显示</span>
+            <label class="seed-inline">
+              <span class="label">种子</span>
+              <input type="text" id="seed" placeholder="留空随机" inputmode="numeric" />
+            </label>
+          </div>
+
+          <div class="span-12 actions">
+            <button type="button" id="btn" class="btn">生成</button>
+            <span id="status" class="status" aria-live="polite"></span>
+          </div>
+
+          <div class="span-6 out-cell">
+            <h2 class="out-label">提示</h2>
+            <pre id="outPrompt" class="out-text"></pre>
+          </div>
+          <div class="span-6 out-cell out-cell--emph">
+            <h2 class="out-label">续写</h2>
+            <pre id="outGen" class="out-text stream" aria-live="polite"></pre>
+          </div>
+        </div>
+      </main>
+
+      <footer class="foot">
+        <p>端口 3847 · <code>MODEL_PATH</code> · <code>out/export/hf-style</code></p>
+      </footer>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
