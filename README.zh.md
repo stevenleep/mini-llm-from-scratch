@@ -142,6 +142,8 @@ npm run stop:ui
 docs/
   FEATURES.md      已实现功能（英文）
   FEATURES.zh.md   已实现功能（中文）
+  GPU.md           JS 与 GPU（英文）
+  GPU.zh.md        JS 与 GPU（中文）
 README.md          本说明（英文）
 README.zh.md       本说明（中文）
 src/
@@ -177,6 +179,7 @@ out/               训练输出（默认 gitignore）
 - 模型小、数据少时，输出易重复或不通顺；解码技巧只能缓解，不能替代规模。
 - 字符级建模在 Unicode 场景下词表膨胀，长程结构弱于子词模型。
 - 自带 HTTP 服务仅供本机实验（无鉴权、未做公网加固）。
+- **训练仅在 CPU 上运行**（自实现 JS 张量）。若要在 JS 里用 GPU，通常需 TensorFlow.js + CUDA（`tfjs-node-gpu`）或重写算子；说明见 **[docs/GPU.zh.md](docs/GPU.zh.md)**（[English](docs/GPU.md)）。
 
 ---
 

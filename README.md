@@ -142,6 +142,8 @@ To replicate a reported experiment: record Node.js version, Git commit (manually
 docs/
   FEATURES.md     Implemented features (EN)
   FEATURES.zh.md  Implemented features (中文)
+  GPU.md          JS + GPU training options (EN)
+  GPU.zh.md       JS + GPU 说明（中文）
 README.zh.md      This readme (简体中文)
 src/
   config.js       Hyperparameters
@@ -176,6 +178,7 @@ The list below uses [GitHub-flavored Markdown task lists](https://docs.github.co
 - Small capacity and limited training data yield repetitive or incoherent text; decoding heuristics reduce artifacts but do not replace model scale.
 - Character-level modeling implies large vocabularies for diverse Unicode text and weaker long-range structure than subword models.
 - The bundled HTTP server is for local experimentation only (no authentication, no hardening for untrusted networks).
+- **Training runs on CPU only** (custom JS tensors). GPU training in the JavaScript ecosystem usually means TensorFlow.js with CUDA (`tfjs-node-gpu`) or rewriting ops; see **[docs/GPU.md](docs/GPU.md)** ([中文](docs/GPU.zh.md)).
 
 ---
 

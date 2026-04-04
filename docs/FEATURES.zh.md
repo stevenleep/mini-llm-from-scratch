@@ -80,6 +80,7 @@
 
 - 子词 / BPE 分词（见 Roadmap）。
 - Adam、LayerNorm、多卡、混合精度等（Roadmap 或注释层面）。
+- **内置 `Tensor` 运行时的 GPU 执行**（当前仅 CPU）；若要坚持 JS 又想用 GPU，可选路径见 [GPU.zh.md](GPU.zh.md)。
 - 面向公网的生产级 API 安全（当前仅本地实验）。
 
 后续计划见 [README § Roadmap](../README.md#roadmap) 或 [README.zh § 路线图](../README.zh.md#路线图)。

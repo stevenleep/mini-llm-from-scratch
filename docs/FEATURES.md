@@ -80,6 +80,7 @@
 
 - Subword / BPE tokenizer (roadmap).
 - Adam, LayerNorm, multi-GPU, mixed precision (roadmap or comments only).
+- **GPU execution** for the built-in `Tensor` runtime (CPU-only); see [GPU.md](GPU.md) for JS+GPU options elsewhere.
 - Production API security (local experimentation only).
 
 For planned work, see [README.md § Roadmap](../README.md#roadmap).
