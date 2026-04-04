@@ -119,15 +119,16 @@ npm run stop:ui
 
 ## Reproducibility (academic small-model runs)
 
-Training prints a single **`[repro]`** line with:
+Training prints a **`[repro]`** line with:
 
-- **`git`**: short hash from `git rev-parse --short HEAD` (`unknown` if not a Git checkout).
 - **`corpus_sha256_16`**: first 16 hex chars of SHA-256 over the **loaded** corpus string (after UTF-8 read); use the same file bytes and `CORPUS_PATH` to match.
 - **`seed` / `steps` / `seqLen` / `val_fraction`**: effective hyperparameters for that run.
 
+The trainer does **not** invoke Git (no dependency on `.git` or the `git` binary). To attach a source revision to a paper or lab note, run `git rev-parse --short HEAD` yourself (or read `CI_COMMIT_SHA` in CI) and write it next to the saved `train_metrics.csv`.
+
 Metrics rows (same intervals as console logs) are appended to **`METRICS_CSV`** with columns `step`, `train_loss`, `val_loss`, `val_ppl`. Validation uses a **tail hold-out** of the token sequence and a **fixed** RNG seed for the validation window sampler so repeated runs with the same code, corpus, and config yield the same `val_*` numbers at each step.
 
-To replicate a reported experiment: record Node.js version, `git` hash, corpus file and its hash, full env (or export `env | sort`), and archive `train_metrics.csv` next to the paper or note.
+To replicate a reported experiment: record Node.js version, Git commit (manually), corpus file and its hash, full env (or export `env | sort`), and archive `train_metrics.csv` next to the paper or note.
 
 ---
 

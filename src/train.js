@@ -77,7 +77,6 @@
  * ④ sgdStep：真的改权重。
  */
 
-import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -190,12 +189,6 @@ const appendMetricsCsv = (csvPath, step, trainLoss, valLoss, valPpl) => {
  */
 const main = () => {
   const CORPUS = loadCorpus();
-  let gitSha = 'unknown';
-  try {
-    gitSha = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
-  } catch {
-    /* not a git checkout */
-  }
   const corpusSha16 = createHash('sha256').update(CORPUS).digest('hex').slice(0, 16);
 
   const useFun = process.env.FUN_TRAIN === '1';
@@ -244,9 +237,7 @@ const main = () => {
   }
 
   console.log(
-    '[repro] git=',
-    gitSha,
-    'corpus_sha256_16=',
+    '[repro] corpus_sha256_16=',
     corpusSha16,
     'seed=',
     cfg.seed,
