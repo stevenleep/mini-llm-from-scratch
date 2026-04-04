@@ -12,6 +12,8 @@ Minimal, **zero-dependency** implementation of a character-level decoder-only Tr
 
 ## Features
 
+**Full inventory of current behavior** (endpoints, env vars, file roles): **[docs/FEATURES.md](docs/FEATURES.md)**.
+
 | Component | Description |
 | :--- | :--- |
 | Model | `MiniGPT`: token and position embeddings, stacked Transformer blocks, language-model head |
@@ -135,6 +137,8 @@ To replicate a reported experiment: record Node.js version, Git commit (manually
 ## Repository layout
 
 ```
+docs/
+  FEATURES.md     Inventory of implemented behavior
 src/
   config.js       Hyperparameters
   train.js        Training loop and export
