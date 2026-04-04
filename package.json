@@ -15,6 +15,7 @@
     "chat": "node src/infer.js",
     "ui": "node src/chatServer.js",
     "stop:ui": "lsof -ti :3847 2>/dev/null | xargs kill -9 2>/dev/null || true",
-    "restart:ui": "npm run stop:ui && node src/chatServer.js"
+    "restart:ui": "npm run stop:ui && node src/chatServer.js",
+    "gpu:smoke": "node scripts/tfjs-gpu-smoke.mjs"
   }
 }

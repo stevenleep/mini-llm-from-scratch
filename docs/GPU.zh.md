@@ -23,3 +23,24 @@
 **若目标是「验证 JS 能调用 GPU」：** 可单独写一个**小脚本**，只检测 `tfjs-node-gpu` 能否加载并在 GPU 上跑一次 `matmul`，再逐步迁移各层——**不要**指望在不大改架构的情况下，给现有 `Tensor.js` 逐行打补丁就完成。
 
 更多英文说明见 [GPU.md](GPU.md)。
+
+---
+
+## 本仓库自带的 JS 自检（TensorFlow.js）
+
+核心训练仍为零依赖；若要**在 JS 里验证**本机能否用 TF Node 后端（GPU 或 CPU 绑定），可使用：
+
+```bash
+# 任选其一（勿同时装 tfjs-node-gpu 与 tfjs-node）
+npm install @tensorflow/tfjs-node-gpu   # NVIDIA + CUDA，可能用 GPU
+# 或
+npm install @tensorflow/tfjs-node       # Node 原生（需本地编译成功）
+# 或（最易成功，纯 JS、较慢）
+npm install @tensorflow/tfjs
+
+npm run gpu:smoke
+# 可选：SIZE=2048 npm run gpu:smoke
+```
+
+脚本路径：`scripts/tfjs-gpu-smoke.mjs`。按顺序尝试 **gpu → node → 纯 tfjs**，打印 **backend** 并对随机矩阵做 `matMul` 计时。  
+纯 JS 包会多一行 TensorFlow 提示，可忽略；**Linux + NVIDIA + CUDA** 下用 `tfjs-node-gpu` 才有机会走 GPU。

@@ -90,6 +90,7 @@ npm run stop:ui
 | `ui` | `node src/chatServer.js` |
 | `stop:ui` | 结束监听 `3847` 端口的进程 |
 | `restart:ui` | 先 `stop:ui` 再启动 `chatServer` |
+| `gpu:smoke` | 可选：安装 `@tensorflow/tfjs-node` 或 `tfjs-node-gpu` 后运行 `scripts/tfjs-gpu-smoke.mjs`，见 [docs/GPU.zh.md](docs/GPU.zh.md) |
 
 ---
 
@@ -146,6 +147,8 @@ docs/
   GPU.zh.md        JS 与 GPU（中文）
 README.md          本说明（英文）
 README.zh.md       本说明（中文）
+scripts/
+  tfjs-gpu-smoke.mjs   可选：安装 tfjs-node 后的矩阵乘自检
 src/
   config.js        超参数
   train.js         训练与导出

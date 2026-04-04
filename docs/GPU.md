@@ -23,3 +23,23 @@ To train with a **GPU while staying in JavaScript**, you typically use a runtime
 **Practical path for “JS + GPU” experiments:** start a **separate** small script that only checks `tfjs-node-gpu` loads and runs one `matmul` on GPU, then gradually port layers—not by patching `Tensor.js` line by line.
 
 See [GPU.zh.md](GPU.zh.md) for the same content in Chinese.
+
+---
+
+## Bundled JS smoke test (TensorFlow.js)
+
+Core training stays dependency-free. To **verify** TF.js Node (GPU or CPU binding) on your machine:
+
+```bash
+# Pick one (do not install tfjs-node-gpu and tfjs-node together)
+npm install @tensorflow/tfjs-node-gpu   # NVIDIA + CUDA, may use GPU
+# or
+npm install @tensorflow/tfjs-node       # native binding (must build)
+# or (easiest, pure JS, slowest)
+npm install @tensorflow/tfjs
+
+npm run gpu:smoke
+# optional: SIZE=2048 npm run gpu:smoke
+```
+
+Script: `scripts/tfjs-gpu-smoke.mjs` — tries **gpu → node → pure `@tensorflow/tfjs`**, prints **backend**, times a random `matMul`. Pure JS may print a TF.js hint to install `tfjs-node`; ignore or install the native package. Linux + NVIDIA + CUDA + `tfjs-node-gpu` is the path to GPU.

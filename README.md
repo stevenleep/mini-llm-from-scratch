@@ -90,6 +90,7 @@ npm run stop:ui
 | `ui` | `node src/chatServer.js` |
 | `stop:ui` | Terminate process listening on port `3847` |
 | `restart:ui` | `stop:ui` then start `chatServer` |
+| `gpu:smoke` | Optional: after installing `@tensorflow/tfjs-node` or `@tensorflow/tfjs-node-gpu`, runs `scripts/tfjs-gpu-smoke.mjs` (see [docs/GPU.md](docs/GPU.md)) |
 
 ---
 
@@ -144,6 +145,8 @@ docs/
   FEATURES.zh.md  Implemented features (中文)
   GPU.md          JS + GPU training options (EN)
   GPU.zh.md       JS + GPU 说明（中文）
+scripts/
+  tfjs-gpu-smoke.mjs   Optional TF.js matmul smoke test (after npm install tfjs-node*)
 README.zh.md      This readme (简体中文)
 src/
   config.js       Hyperparameters
