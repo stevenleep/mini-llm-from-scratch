@@ -38,7 +38,7 @@ Minimal, **zero-dependency** implementation of a character-level decoder-only Tr
 
 ### Train
 
-Default corpus: `data/corpus/playful_zh.txt` (override with `CORPUS_PATH`).
+Default corpus: `data/corpus/playful_zh.txt` (override with `CORPUS_PATH`). If `data/corpus/identity_zh.txt` exists, its text is **appended** after the main corpus (optional identity Q&A patterns, e.g. “who are you” → “我是李小烨”). Disable with `SKIP_IDENTITY_CORPUS=1`; custom path with `IDENTITY_CORPUS_PATH`.
 
 ```bash
 npm run train

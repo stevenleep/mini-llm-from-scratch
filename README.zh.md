@@ -38,7 +38,8 @@
 
 ### 训练
 
-默认语料：`data/corpus/playful_zh.txt`（可用 `CORPUS_PATH` 覆盖）。
+默认语料：`data/corpus/playful_zh.txt`（可用 `CORPUS_PATH` 覆盖）。  
+训练时会**自动在主语料后拼接** `data/corpus/identity_zh.txt`（若存在）：用于强化「你是谁 / 你叫什么」→「我是李小烨」等身份续写。不需要时设 `SKIP_IDENTITY_CORPUS=1`；自定义路径用 `IDENTITY_CORPUS_PATH`。
 
 ```bash
 npm run train

@@ -22,6 +22,7 @@
 
 import { statSync } from 'node:fs';
 import { generateContinuation } from './generate.js';
+import { alignIdentityPrompt } from './promptAlign.js';
 import { readHfModelDir } from './io/hfModelDir.js';
 import { readMiniGPTFile } from './io/miniGptIO.js';
 
@@ -125,6 +126,11 @@ const main = async () => {
   const st = statSync(opts.modelPath);
   const { model, tok } = st.isDirectory() ? readHfModelDir(opts.modelPath) : readMiniGPTFile(opts.modelPath);
 
+  const promptUsed = alignIdentityPrompt(opts.prompt);
+  if (promptUsed !== opts.prompt) {
+    console.log('[提示] 已对齐训练语料:', opts.prompt, '→', promptUsed);
+  }
+
   const genOpts = {
     maxNewTokens: opts.maxNewTokens,
     temperature: opts.greedy ? 0 : opts.temperature,
@@ -138,17 +144,17 @@ const main = async () => {
   };
 
   if (opts.stream) {
-    console.log('提示:', opts.prompt);
+    console.log('提示:', promptUsed);
     process.stdout.write('续写: ');
   }
 
-  const result = await generateContinuation(model, tok, opts.prompt, genOpts);
+  const result = await generateContinuation(model, tok, promptUsed, genOpts);
 
   if (opts.stream) {
     process.stdout.write('\n');
     if (!opts.greedy) console.error('（seed', result.seedUsed, '，同提示同种子可复现）');
   } else {
-    console.log('提示:', opts.prompt);
+    console.log('提示:', promptUsed);
     console.log('续写:', result.generated);
     if (!opts.greedy) console.log('（随机种子', result.seedUsed, '，同提示同种子可复现）');
   }

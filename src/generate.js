@@ -8,6 +8,7 @@
  * =============================================================================
  */
 
+import { getIdentityCanonicalContinuation, shouldBiasIdentityAnswer } from './promptAlign.js';
 import { mulberry32 } from './tensor/Tensor.js';
 
 const softmax1d = (logits) => {
@@ -133,6 +134,10 @@ export const sampleNextId = (logitsRow, options) => {
  * @param {string} prompt
  * @param {object} [opt]
  * @param {boolean} [opt.yieldEachToken] 为 true 且提供 onToken 时，每字后 await 一次事件循环，让 SSE/终端能真正逐块到达（否则整段在同一次 tick 内算完，看起来像同步）。
+ * @param {number} [opt.identityLogitBias] 仅在不使用标准答句引导时：第一步给「我」加的 logit（见 IDENTITY_LOGIT_BIAS）。
+ * @param {boolean} [opt.identityGuided] 身份问句是否按语料标准句逐步抬高 logits（默认 true；IDENTITY_GUIDED=0 关闭）。
+ * @param {number} [opt.identityGuideStrength] 引导时每步对「下一个标准字」加的 logit（默认约 4.5）。
+ * @param {boolean} [opt.identityStopAfterCanonical] 续写恰好等于标准句后是否停止（默认 true；IDENTITY_STOP_AFTER=0 继续往后生成）。
  */
 export async function generateContinuation(model, tok, prompt, opt = {}) {
   const maxNewTokens = opt.maxNewTokens ?? 64;
@@ -146,6 +151,25 @@ export async function generateContinuation(model, tok, prompt, opt = {}) {
   const yieldEachToken = !!opt.yieldEachToken && !!onToken;
   const seed = opt.seed !== undefined ? opt.seed >>> 0 : (Date.now() ^ (Math.random() * 0x100000000)) >>> 0;
   const rng = mulberry32(seed);
+
+  let identityBias = opt.identityLogitBias;
+  if (identityBias === undefined) {
+    if (process.env.IDENTITY_LOGIT_BIAS === '0') identityBias = 0;
+    else identityBias = parseFloat(process.env.IDENTITY_LOGIT_BIAS ?? '1.35');
+  }
+
+  const guide = getIdentityCanonicalContinuation(prompt);
+  let identityGuided = opt.identityGuided;
+  if (identityGuided === undefined) identityGuided = process.env.IDENTITY_GUIDED !== '0';
+  const useGuide = Boolean(guide && identityGuided);
+  const guideStrength =
+    opt.identityGuideStrength !== undefined
+      ? opt.identityGuideStrength
+      : parseFloat(process.env.IDENTITY_GUIDE_STRENGTH ?? '12');
+  let identityStop =
+    opt.identityStopAfterCanonical !== undefined
+      ? opt.identityStopAfterCanonical
+      : process.env.IDENTITY_STOP_AFTER !== '0';
 
   if (prompt.length === 0) {
     throw new Error('提示不能为空，至少给一个字符，模型才知道从哪接');
@@ -167,7 +191,23 @@ export async function generateContinuation(model, tok, prompt, opt = {}) {
     const row = new Float32Array(V);
     for (let j = 0; j < V; j++) row[j] = logits.data[rowOff + j];
 
+    if (useGuide && guide && generated.length < guide.length) {
+      const want = guide[generated.length];
+      const tid = Array.from(tok.encode(want))[0];
+      row[tid] += guideStrength;
+    } else if (step === 0 && identityBias > 0 && shouldBiasIdentityAnswer(prompt)) {
+      const id我 = Array.from(tok.encode('我'))[0];
+      row[id我] += identityBias;
+    }
+
     const recentForPenalty = ids.slice(Math.max(0, ids.length - repetitionWindow));
+    const inGuidePrefix =
+      useGuide &&
+      guide &&
+      generated.length < guide.length &&
+      guide.startsWith(generated);
+    // 提示里常有「叫」「你」等字；重复惩罚会误伤标准答句里的下一字（如「你叫什么？」后对「叫」）
+    const repPen = inGuidePrefix ? 1 : repetitionPenalty;
     const nextId = sampleNextId(row, {
       temperature,
       topK,
@@ -175,7 +215,7 @@ export async function generateContinuation(model, tok, prompt, opt = {}) {
       greedy,
       rng,
       recentTokenIds: recentForPenalty,
-      repetitionPenalty,
+      repetitionPenalty: repPen,
     });
     ids.push(nextId);
     const ch = tok.itos[nextId];
@@ -183,6 +223,10 @@ export async function generateContinuation(model, tok, prompt, opt = {}) {
     if (onToken) onToken(ch);
     if (yieldEachToken) {
       await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    if (useGuide && identityStop && guide && generated === guide) {
+      break;
     }
   }
 

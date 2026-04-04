@@ -8,6 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateContinuation } from './generate.js';
+import { alignIdentityPrompt } from './promptAlign.js';
 import { readHfModelDir } from './io/hfModelDir.js';
 import { readMiniGPTFile } from './io/miniGptIO.js';
 
@@ -55,7 +56,8 @@ const sendJson = (res, status, obj) => {
  * @param {object} body
  */
 const parseGenerateBody = (body) => {
-  const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+  const raw = typeof body.prompt === 'string' ? body.prompt : '';
+  const prompt = alignIdentityPrompt(raw || '在');
   const maxNewTokens = Math.min(512, Math.max(0, parseInt(body.maxNewTokens ?? 64, 10) || 64));
   const temperature = body.greedy ? 0 : parseFloat(body.temperature ?? 0.75);
   const topK = Math.max(0, parseInt(body.topK ?? 50, 10) || 0);
@@ -65,7 +67,7 @@ const parseGenerateBody = (body) => {
   const greedy = !!body.greedy;
   const seed = body.seed !== undefined && body.seed !== '' ? parseInt(body.seed, 10) >>> 0 : undefined;
   return {
-    prompt: prompt || '在',
+    prompt: raw ? prompt : '在',
     opts: {
       maxNewTokens,
       temperature,
