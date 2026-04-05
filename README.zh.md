@@ -1,36 +1,69 @@
 # mini-llm-from-scratch
 
-[English](README.md) | **中文**
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![无 npm 依赖](https://img.shields.io/badge/npm%20依赖-无-555555)]()
 
-用 **纯 JavaScript** 实现的**零依赖**、**字符级**、类 GPT **仅解码器** Transformer。支持本地训练、权重导出、命令行续写与带 **SSE 流式** 的小型网页界面；计算全部在本机完成，不依赖外部推理服务。
+[English](README.md) | **简体中文**
 
-| | |
+本项目实现了一个**零第三方 npm 依赖**、**字符级**、**仅解码器**的类 GPT Transformer（`MiniGPT`），配套轻量自动微分与张量算子。支持从纯文本训练、以接近 Hugging Face 目录结构或单文件 JSON 导出权重、命令行续写，以及基于 **Server-Sent Events（SSE）** 的**本地**网页界面。全部计算在本地进程完成，无需外部推理 API。
+
+---
+
+## 价值与适用场景
+
+| 面向人群 | 能带来的价值 |
 | :--- | :--- |
-| **运行环境** | Node.js 18+（ES 模块），仅标准库 |
-| **定位** | 教学与科研原型；**不是**生产级对话或事实问答系统 |
-| **用途** | 理解小型 Transformer 的前向/反向与续写解码；可改配置、换语料对比现象。**不可**与商用大模型对标 |
+| **学习者与讲师** | **端到端可读**：嵌入、注意力、LayerNorm、前馈、损失、反向传播、SGD/Adam、解码策略均在 JavaScript 中实现，可用调试器逐步跟踪；理解 Transformer 训练不必依赖不透明原生算子。 |
+| **研究者与实验者** | **可复现的小型实验**：语料哈希（`corpus_sha256_16`）、固定随机种子、尾部验证集与追加写入的 **metrics CSV**，便于对比实验、写实验笔记或课程报告时给出**可核查依据**。 |
+| **重视环境可移植性的开发者** | **核心路径零 npm 依赖**，仅需 **Node.js ≥ 18**。默认 CPU 训练/推理，无需先配 CUDA 或复杂 Python 环境即可在笔记本、机房或 CI 中跑通，适合教学与快速验证想法。 |
+| **重视工具链与归档的用户** | **导出形态贴近常见习惯**：HF 风格目录（`config.json`、词表、`model.safetensors` 等）与**单文件 JSON**，便于 diff、备份或与现有脚本对接。 |
+| **注重隐私与离线场景** | **默认不经过任何云端推理 API**：数据与计算留在本机；适合离线演示、内网环境或机构对数据出境有要求的场景（仍须遵守贵方合规要求）。 |
+
+**明确不承诺的事项：** 本仓库**不以**对标商业大模型的流畅度、事实准确性或模型规模**为目标**，也**不**提供生产级推理服务（鉴权、弹性扩缩、运维监控等）。它是用于**学习与受控实验**的透明实现，**不能**直接替代成熟对话产品或基座模型服务。
+
+---
+
+## 目录
+
+- [价值与适用场景](#价值与适用场景)
+- [功能概览](#功能概览)
+- [环境要求](#环境要求)
+- [快速开始](#快速开始)
+- [npm 脚本](#npm-脚本)
+- [配置说明](#配置说明)
+- [可复现性](#可复现性)
+- [仓库结构](#仓库结构)
+- [路线图](#路线图)
+- [局限与说明](#局限与说明)
+- [贡献指南](#贡献指南)
+- [安全说明](#安全说明)
+- [许可证](#许可证)
+- [引用](#引用)
 
 ---
 
 ## 功能概览
 
-**已实现行为的完整清单**（接口、环境变量、文件职责）：**[docs/FEATURES.zh.md](docs/FEATURES.zh.md)**（[English](docs/FEATURES.md)）。
-
 | 模块 | 说明 |
 | :--- | :--- |
-| 模型 | `MiniGPT`：词嵌入 + 位置嵌入、多层 Transformer 块、语言模型头 |
-| 自动微分 | 轻量张量与算子（矩阵乘、softmax、交叉熵、SGD） |
-| 训练 | 文本上随机滑窗；可选梯度裁剪；词表由语料构建 |
-| 导出 | HF 风格目录（`config.json`、词表、`model.safetensors`、可选 `model.bin` + 清单）及单文件 JSON |
-| 解码 | 温度、top-k、top-p、重复惩罚；贪心路径在 argmax 前施加重复惩罚 |
-| 网页 | `public/` 静态资源；`POST /api/chat/stream`（SSE）；异步生成并按 token 让出事件循环以实现真实流式 |
+| **模型** | 词嵌入与位置嵌入、多层 Transformer 块（Pre-LN）、因果自注意力、前馈层、语言模型头；线性层可选 **LoRA** 低秩适配 |
+| **自动微分** | 轻量 `Tensor` 与算子（如矩阵乘、softmax、交叉熵）；训练循环支持 **SGD** 与 **Adam** |
+| **训练** | 随机滑窗、可选梯度裁剪、尾部验证集、指标 CSV；支持 **checkpoint**、**续训**、**余弦学习率**、**预热**、**早停** |
+| **导出** | 常见 HF 风格目录（`config.json`、分词器与词表、`model.safetensors`、可选 `model.bin` + 清单）及**单文件 JSON** |
+| **解码** | 温度、top-k、top-p、重复惩罚；贪心路径在 argmax 前施加重复惩罚 |
+| **网页** | `public/` 静态资源；`POST /api/chat/stream` 以 SSE 流式返回 token |
+
+完整行为清单（接口、环境变量、文件职责）见 **[docs/FEATURES.zh.md](docs/FEATURES.zh.md)**（[English](docs/FEATURES.md)）。
 
 ---
 
 ## 环境要求
 
-- Node.js **≥ 18**
-- 无需 `npm install`，无第三方依赖
+- **Node.js ≥ 18**（ES 模块）
+- **无需 `npm install`**：核心训练与推理仅使用 Node.js 标准库
+
+可选：TensorFlow.js Node 相关包，用于 GPU 相关实验（**[docs/GPU.zh.md](docs/GPU.zh.md)**）。
 
 ---
 
@@ -38,51 +71,39 @@
 
 ### 训练
 
-默认语料：`data/corpus/playful_zh.txt`（可用 `CORPUS_PATH` 覆盖）。  
-训练时会**自动在主语料后拼接** `data/corpus/identity_zh.txt`（若存在）：用于强化「你是谁 / 你叫什么」→「我是李小烨」等身份续写。不需要时设 `SKIP_IDENTITY_CORPUS=1`；自定义路径用 `IDENTITY_CORPUS_PATH`。
+默认语料：`data/corpus/playful_zh.txt`（`CORPUS_PATH` 可覆盖）。若存在 `data/corpus/identity_zh.txt`，会在主语料**之后**拼接（用于身份类提示等）。不需要时设置 `SKIP_IDENTITY_CORPUS=1`；自定义路径用 `IDENTITY_CORPUS_PATH`。
 
 ```bash
 npm run train
 ```
 
-加长训练预设（更多步数、更长上下文、学习率等见 `src/config.js`）：
+**预设**（详见 `src/config.js`）：
 
-```bash
-npm run train:fun
-```
+| 命令 | 作用 |
+| :--- | :--- |
+| `npm run train:fun` | 相对默认更长的步数与上下文等 |
+| `npm run train:mega` | 长跑预设（约 1 万步，`megaTrainingPreset`） |
+| `npm run train:ultimate` | 更大模型（`ultimateTrainingPreset`），默认 **Adam + 余弦 + 预热**，默认 **5000** 步 |
+| `npm run train:ultimate:long` | 同上但 **20000** 步并延长预热 |
 
-更长训练（默认约 10000 步，见 `megaTrainingPreset`）：
-
-```bash
-npm run train:mega
-```
-
-**尽力而为档**（更大模型、更长上下文；默认 **5000 步**，见 `ultimateTrainingPreset`，默认 **Adam + 余弦学习率**，仍较慢、导出更大）：
-
-```bash
-npm run train:ultimate
-```
-
-等价于 `ULTIMATE_TRAIN=1 OPTIMIZER=adam COSINE_LR=1 LR_WARMUP=500 node src/train.js`（预热后余弦）。要更长：`STEPS=20000 npm run train:ultimate`。也可单独调 `LR_WARMUP` 或 `STEPS`。
-
-从网络拉取公开中文语料并合并到 `data/corpus/downloaded_mixed_zh.txt`（训练时自动拼到主语料后，除非 `SKIP_DOWNLOAD_CORPUS=1`）：
+可选：拉取混合中文语料至 `data/corpus/downloaded_mixed_zh.txt`（训练时默认合并，除非 `SKIP_DOWNLOAD_CORPUS=1`）：
 
 ```bash
 npm run corpus:fetch
 ```
 
-产物写入 `out/`（默认被 Git 忽略）。
+训练产物（checkpoint、导出、日志）默认写入 `out/`（一般由 `.gitignore` 忽略）。
 
 ### 命令行推理
 
-默认流式输出到标准输出；`--no-stream` 为整段结束后一次性打印。
+默认流式输出；`--no-stream` 在结束时一次性输出。
 
 ```bash
 node src/infer.js ./out/export/hf-style "你好" -n 40
 node src/infer.js ./out/export/hf-style "你好" --no-stream
 ```
 
-解码选项见 `node src/infer.js --help`。
+完整参数见 `node src/infer.js --help`。
 
 ### 网页界面
 
@@ -90,9 +111,7 @@ node src/infer.js ./out/export/hf-style "你好" --no-stream
 npm run ui
 ```
 
-浏览器打开 `http://localhost:3847/`。默认加载 `out/export/hf-style`（可用 `MODEL_PATH` 覆盖）。
-
-结束占用 `3847` 端口的进程：
+浏览器访问 **http://localhost:3847/**。默认加载 `out/export/hf-style`（`MODEL_PATH` 可覆盖）。结束占用 **3847** 端口的进程：
 
 ```bash
 npm run stop:ui
@@ -106,97 +125,90 @@ npm run stop:ui
 | :--- | :--- |
 | `train` | `node src/train.js` |
 | `train:fun` | `FUN_TRAIN=1 node src/train.js` |
-| `train:mega` | `MEGA_TRAIN=1 node src/train.js`（超长步数预设） |
-| `train:ultimate` | `ULTIMATE_TRAIN=1` + Adam + 余弦 LR（默认 5000 步） |
-| `train:ultimate:long` | 同上但 `STEPS=20000`、`LR_WARMUP=2000`（长跑） |
+| `train:mega` | `MEGA_TRAIN=1 node src/train.js` |
+| `train:lora` | `LORA_RANK=8 LORA_ONLY=1 node src/train.js` |
+| `train:ultimate` | Ultimate 预设 + Adam + 余弦 + 预热（默认 5000 步） |
+| `train:ultimate:long` | Ultimate + `STEPS=20000` 与更长预热 |
 | `corpus:fetch` | 下载并生成 `data/corpus/downloaded_mixed_zh.txt` |
-| `export:all` | 从已有 checkpoint 写出多路径导出（见脚本注释） |
-| `build` | 与 `train` 相同 |
-| `infer` / `chat` | `node src/infer.js`（传入模型路径与参数） |
+| `export:all` | 自 checkpoint 多路径导出（见脚本注释） |
+| `build` | 等同于 `train` |
+| `infer` / `chat` | `node src/infer.js` |
 | `ui` | `node src/chatServer.js` |
-| `stop:ui` | 结束监听 `3847` 端口的进程 |
-| `restart:ui` | 先 `stop:ui` 再启动 `chatServer` |
-| `gpu:smoke` | 可选：安装 `@tensorflow/tfjs-node` 或 `tfjs-node-gpu` 后运行 `scripts/tfjs-gpu-smoke.mjs`，见 [docs/GPU.zh.md](docs/GPU.zh.md) |
+| `stop:ui` / `restart:ui` | 释放或重启 `3847` 端口 |
+| `gpu:smoke` | 可选：安装 tfjs-node* 后的矩阵乘自检 |
 
 ---
 
-## 配置（环境变量）
+## 配置说明
 
 ### 训练与导出
 
 | 变量 | 作用 |
 | :--- | :--- |
-| `CORPUS_PATH` | 语料文件路径（默认 `data/corpus/playful_zh.txt`） |
-| `FUN_TRAIN` | 设为 `1` 时合并 `funTrainingPreset`（`src/config.js`） |
-| `MEGA_TRAIN` | 设为 `1` 时合并 `megaTrainingPreset`（步数更多；与 `FUN_TRAIN` 同时设时以本项为准） |
-| `ULTIMATE_TRAIN` | 设为 `1` 时合并 `ultimateTrainingPreset`（大模型；优先于 MEGA / FUN） |
-| `OPTIMIZER` | `adam` 使用 Adam，否则 SGD |
-| `COSINE_LR` | `1` 时按训练进度余弦衰减学习率 |
-| `LR_WARMUP` | 正整数：前若干步学习率从 0 线性升到峰值，再进入余弦（若 `COSINE_LR=1`）或保持常数 lr；`0` 关闭 |
-| `RESUME_FROM` / `LOAD_CHECKPOINT` | 指向 `.mgpt.json`：加载权重续训（须与当前语料词表、结构一致） |
-| `STEP_OFFSET` | 已完成的**全局**训练步数；续训时与余弦/预热对齐（默认 `0`） |
-| `TOTAL_STEPS` | 可选；与 `max(本段步数+STEP_OFFSET, TOTAL_STEPS)` 作为学习率调度总长 |
-| `CHECKPOINT_EVERY` | 正整数：每多少**全局步**写入 `CHECKPOINT_DIR` 下的 `checkpoint-step-*.mgpt.json` 与 `latest.mgpt.json`；`0` 关闭 |
+| `CORPUS_PATH` | 主语料路径（默认 `data/corpus/playful_zh.txt`） |
+| `FUN_TRAIN` | `1` → 合并 `funTrainingPreset` |
+| `MEGA_TRAIN` | `1` → 合并 `megaTrainingPreset`（与 `FUN_TRAIN` 同时设时优先本项） |
+| `ULTIMATE_TRAIN` | `1` → 合并 `ultimateTrainingPreset`（优先于 MEGA / FUN） |
+| `OPTIMIZER` | `adam` 为 Adam，否则 SGD |
+| `COSINE_LR` | `1` → 按调度余弦衰减学习率 |
+| `LR_WARMUP` | 正整数 → 线性预热后再余弦或常数 lr |
+| `RESUME_FROM` / `LOAD_CHECKPOINT` | `.mgpt.json` 续训（须与词表与结构一致） |
+| `STEP_OFFSET` | 已完成的**全局**步数（续训时对齐学习率） |
+| `TOTAL_STEPS` | 可选；调度总长为 `max(本段步数+STEP_OFFSET, TOTAL_STEPS)` |
+| `CHECKPOINT_EVERY` | 每 **N** 个全局步保存（`0` 关闭） |
 | `CHECKPOINT_DIR` | checkpoint 目录（默认 `./out/checkpoints`） |
-| `EARLY_STOP_PATIENCE` | 有验证集时，连续多少次**打日志** `val_loss` 未刷新最优则提前结束；`0` 关闭（续训用 Adam 时动量不会从文件恢复） |
-| `SKIP_DOWNLOAD_CORPUS` | `1` 时不合并 `data/corpus/downloaded_mixed_zh.txt` |
-| `DOWNLOAD_CORPUS_PATH` | 网络混合语料路径（默认 `data/corpus/downloaded_mixed_zh.txt`） |
-| `STEPS` | 正整数，覆盖训练总步数 |
-| `SKIP_EXPORT` | `1` 时不写出导出文件 |
-| `EXPORT_DIR` | HF 风格导出目录（默认 `out/export/hf-style` 一带） |
-| `EXPORT_PATH` | 单文件 JSON 路径 |
-| `VERBOSE` | `1` 时打印详细训练日志 |
-| `GRAD_CLIP` | 梯度裁剪上界（默认 `1`；`0` 关闭） |
-| `VAL_FRACTION` | 语料**尾部**留出作验证的比例（默认 `0.08`；语料过短则关闭验证） |
-| `VAL_SAMPLES` | 每次打日志时在验证段上采样的窗口数（默认 `24`；固定种子以利复现 `val_loss` / `val_ppl`） |
-| `METRICS_CSV` | 指标 CSV 路径（默认 `./out/train_metrics.csv`） |
-| `SKIP_METRICS` | `1` 时不写指标 CSV |
+| `EARLY_STOP_PATIENCE` | 验证连续若干次日志未改善则停止（`0` 关闭）。**Adam 动量不会从 checkpoint 恢复** |
+| `SKIP_DOWNLOAD_CORPUS` | `1` → 不合并下载混合语料 |
+| `DOWNLOAD_CORPUS_PATH` | 混合语料路径 |
+| `STEPS` | 覆盖训练总步数 |
+| `SKIP_EXPORT` | `1` → 不写出导出 |
+| `EXPORT_DIR` / `EXPORT_PATH` | HF 目录与单文件 JSON 路径 |
+| `VERBOSE` | `1` → 详细日志 |
+| `GRAD_CLIP` | 全局梯度裁剪（默认 `1`；`0` 关闭） |
+| `VAL_FRACTION` | 尾部验证比例（默认 `0.08`） |
+| `VAL_SAMPLES` | 每次日志在验证集上采样窗口数（默认 `24`） |
+| `METRICS_CSV` / `SKIP_METRICS` | 指标 CSV 与开关 |
+| `LORA_RANK` / `LORA_ALPHA` / `LORA_ONLY` | LoRA（见 `src/config.js` 与 `src/train.js` 注释） |
 
 ### 推理与 UI
 
 | 变量 | 作用 |
 | :--- | :--- |
-| `MODEL_PATH` | `chatServer.js` 加载的模型目录或 `.json`（默认 `out/export/hf-style`） |
+| `MODEL_PATH` | `chatServer.js` 加载的目录或 `.json` |
 | `PORT` | HTTP 端口（默认 `3847`） |
 
 ---
 
-## 可复现性（学术向小模型）
+## 可复现性
 
 训练开始会打印 **`[repro]`** 行，包含：
 
-- **`corpus_sha256_16`**：读入内存后的语料字符串（UTF-8）的 SHA-256 前 16 个十六进制字符；需相同文件内容与 `CORPUS_PATH` 才能对齐。
-- **`seed` / `steps` / `seqLen` / `val_fraction`**：本次运行的有效超参。
+- **`corpus_sha256_16`**：读入内存后的 UTF-8 语料字符串的 SHA-256 前 16 个十六进制字符。
+- **`seed`、`steps`、`seqLen`、`val_fraction`**：本次有效超参。
 
-**训练脚本不会调用 Git**；若需在论文或实验笔记中标注代码版本，请自行在终端执行 `git rev-parse --short HEAD`（或 CI 中的 `CI_COMMIT_SHA`），并与保存的 `train_metrics.csv` 一并记录。
+**训练脚本不调用 Git。** 论文或实验笔记中请自行记录 `git rev-parse --short HEAD`（或 CI 中的 `CI_COMMIT_SHA`），并与 `train_metrics.csv` 一并归档。
 
-与控制台同频率向 **`METRICS_CSV`** 追加行，列为 `step`, `train_loss`, `val_loss`, `val_ppl`。验证使用语料**尾部留出**的 token 序列，且验证窗口采样 RNG **固定**，因而在相同代码、语料与环境下，各步的 `val_*` 可重复。
-
-复现他人实验时建议记录：Node 版本、Git 提交（手动）、语料文件及其哈希、完整环境变量、`train_metrics.csv` 归档。
+验证使用 token 序列的**尾部留出**，且验证窗口采样 RNG **固定**，因而在相同代码、语料字节与环境变量下，`val_loss` / `val_ppl` 可重复。
 
 ---
 
 ## 仓库结构
 
 ```
-docs/
-  FEATURES.md      已实现功能（英文）
-  FEATURES.zh.md   已实现功能（中文）
-  GPU.md           JS 与 GPU（英文）
-  GPU.zh.md        JS 与 GPU（中文）
-README.md          本说明（英文）
-README.zh.md       本说明（中文）
-scripts/
-  tfjs-gpu-smoke.mjs   可选：安装 tfjs-node 后的矩阵乘自检
+LICENSE            MIT 许可证全文
+CONTRIBUTING.md    贡献说明
+SECURITY.md        本地演示服务的安全预期
+docs/              扩展文档（功能清单、GPU 说明等）
+scripts/           辅助脚本（语料拉取、导出、可选 GPU 自检）
 src/
-  config.js        超参数
-  train.js         训练与导出
+  config.js        超参数预设
+  train.js         训练、优化器、导出
   infer.js         命令行
   chatServer.js    静态页与 HTTP/SSE
-  generate.js      续写与解码
+  generate.js      解码与续写
   model/ nn/ tensor/ io/ data/
-data/corpus/       文本语料
-public/            浏览器前端
+data/corpus/       示例与可选语料（UTF-8 文本）
+public/            前端静态资源
 out/               训练输出（默认 gitignore）
 ```
 
@@ -204,27 +216,45 @@ out/               训练输出（默认 gitignore）
 
 ## 路线图
 
-以下使用 GitHub 任务列表语法，可在 PR 中勾选。顺序不代表优先级。
+以 GitHub 任务列表跟踪；顺序不代表优先级。
 
-- [ ] **架构说明** — 张量前向/反向数据流短文，指向 `train.js`、`tensor/ops.js`。
-- [ ] **子词分词** — 可选 BPE / SentencePiece 风格路径；字符级仍为默认教学路径。
-- [x] **评估** — 尾部留出验证集、`val_loss` / `val_ppl`、指标 CSV（见「可复现性」）。
-- [ ] **自动化测试** — 核心算子数值、分词往返、前向形状等。
-- [ ] **训练** — 学习率调度；在保持可读前提下探索 WASM 等加速。
-- [ ] **网页** — 开发时可选模型路径；默认导出路径缺失时的更清晰报错。
-- [ ] **分发** — 仅推理所需最小文件说明；可选 `npm pack` 流程。
-
----
-
-## 局限
-
-- 模型小、数据少时，输出易重复或不通顺；解码技巧只能缓解，不能替代规模。
-- 字符级建模在 Unicode 场景下词表膨胀，长程结构弱于子词模型。
-- 自带 HTTP 服务仅供本机实验（无鉴权、未做公网加固）。
-- **训练仅在 CPU 上运行**（自实现 JS 张量）。若要在 JS 里用 GPU，通常需 TensorFlow.js + CUDA（`tfjs-node-gpu`）或重写算子；说明见 **[docs/GPU.zh.md](docs/GPU.zh.md)**（[English](docs/GPU.md)）。
+- [ ] 架构说明短文：张量前向/反向数据流，指向 `train.js`、`tensor/ops.js`
+- [ ] 可选子词分词路径；字符级仍为默认教学路径
+- [x] 尾部验证、`val_loss` / `val_ppl`、指标 CSV
+- [ ] 自动化测试：核心算子、分词往返、形状不变量
+- [ ] 在保持可读前提下探索 WASM 等加速
+- [ ] UI：默认导出路径缺失时的更清晰报错
+- [ ] 仅推理分发所需最小文件说明
 
 ---
 
-## 许可
+## 局限与说明
 
-仓库未附带 `LICENSE` 文件；`package.json` 中 `"private": true`。再分发前请自行添加许可条款。
+- **规模与数据：** 小模型与有限语料易产生重复或不通顺输出；解码技巧只能缓解，无法替代模型与数据规模。
+- **字符级建模：** Unicode 场景下词表较大，长程结构通常弱于子词模型。
+- **CPU 训练：** 核心实现为纯 JS 张量栈；GPU 路径需 TensorFlow.js 等（**[docs/GPU.zh.md](docs/GPU.zh.md)**）。
+- **本地演示服务：** 内置 HTTP 服务仅供**本机或可信环境**试用（**[SECURITY.md](SECURITY.md)**）。
+
+---
+
+## 贡献指南
+
+请参阅 **[CONTRIBUTING.md](CONTRIBUTING.md)**。
+
+---
+
+## 安全说明
+
+本地 Web 服务的预期与风险提示见 **[SECURITY.md](SECURITY.md)**。
+
+---
+
+## 许可证
+
+本项目以 **MIT License** 发布，全文见 **[LICENSE](LICENSE)**。
+
+---
+
+## 引用
+
+若用于教学或研究，注明仓库 URL 与提交哈希即可；无强制引用格式。

@@ -1,8 +1,17 @@
 {
   "name": "mini-llm-from-scratch",
   "version": "0.1.0",
-  "private": true,
-  "description": "教学用最小语言模型",
+  "private": false,
+  "description": "Dependency-free, character-level GPT-style transformer in JavaScript: training, HF-style export, CLI and local SSE web UI.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stevenleep/mini-llm-from-scratch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/stevenleep/mini-llm-from-scratch/issues"
+  },
+  "homepage": "https://github.com/stevenleep/mini-llm-from-scratch#readme",
   "type": "module",
   "engines": {
     "node": ">=18"
