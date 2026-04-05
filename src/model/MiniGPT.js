@@ -46,6 +46,7 @@ import { TransformerBlock } from '../nn/TransformerBlock.js';
 export class MiniGPT {
   constructor(cfg, rng) {
     const { vocabSize, seqLen, dModel, nHeads, nLayers, dFf } = cfg;
+    const loraOpts = { loraRank: cfg.loraRank ?? 0, loraAlpha: cfg.loraAlpha ?? 16 };
     this.seqLen = seqLen;
     this.dModel = dModel;
     this.tokEmb = Tensor.randn([vocabSize, dModel], rng, true);
@@ -53,9 +54,9 @@ export class MiniGPT {
     /** @type {import('../nn/TransformerBlock.js').TransformerBlock[]} */
     this.blocks = [];
     for (let i = 0; i < nLayers; i++) {
-      this.blocks.push(new TransformerBlock(dModel, nHeads, dFf, rng));
+      this.blocks.push(new TransformerBlock(dModel, nHeads, dFf, rng, loraOpts));
     }
-    this.lmHead = new Linear(dModel, vocabSize, rng);
+    this.lmHead = new Linear(dModel, vocabSize, rng, loraOpts);
   }
 
   /**
@@ -65,7 +66,7 @@ export class MiniGPT {
    * 【内部顺序（与 调用顺序.txt 第 3 节一致）】
    * ① embed：编号 → 查字典 → 每字一行向量
    * ② narrowRows + add：取出「第几个字」的信息，加到向量上
-   * ③ 每一层 block：注意力（大家看前面）→ 加回 → 前馈（每个字自己弯一弯）→ 加回
+   * ③ 每一层 block：Pre-LN → 注意力 → 残差 → Pre-LN → 前馈 → 残差
    * ④ lmHead：每行向量 → 对每个可能字的打分
    */
   forward(tokenIds) {
@@ -86,6 +87,27 @@ export class MiniGPT {
       p.push(...b.parameters());
     }
     return p;
+  }
+
+  /** 仅 LoRA 矩阵（无 LoRA 时为空数组）。 */
+  loraParameters() {
+    const p = [...this.lmHead.loraParameters()];
+    for (const b of this.blocks) {
+      p.push(...b.loraParameters());
+    }
+    return p;
+  }
+
+  freezeEmbeddings() {
+    this.tokEmb.requiresGrad = false;
+    this.posEmb.requiresGrad = false;
+  }
+
+  freezeBaseLinearForLoRA() {
+    this.lmHead.freezeBaseForLoRA();
+    for (const b of this.blocks) {
+      b.freezeBaseForLoRA();
+    }
   }
 }
 

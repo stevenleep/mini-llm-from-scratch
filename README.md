@@ -50,6 +50,26 @@ Extended preset (more steps, longer context, tuned learning rate):
 npm run train:fun
 ```
 
+Very long run (default ~10k steps; see `megaTrainingPreset` in `src/config.js`):
+
+```bash
+npm run train:mega
+```
+
+**Maximum-effort preset** (larger model, longer context, default **5000** steps in `ultimateTrainingPreset`; defaults to **Adam + cosine LR**; slow and larger exports):
+
+```bash
+npm run train:ultimate
+```
+
+Equivalent to `ULTIMATE_TRAIN=1 OPTIMIZER=adam COSINE_LR=1 LR_WARMUP=500 node src/train.js` (warmup then cosine). For a longer run: `STEPS=20000 npm run train:ultimate`. Tune `LR_WARMUP` or `OPTIMIZER` / `COSINE_LR` as needed.
+
+Download public Chinese text and merge into `data/corpus/downloaded_mixed_zh.txt` (auto-appended when training unless `SKIP_DOWNLOAD_CORPUS=1`):
+
+```bash
+npm run corpus:fetch
+```
+
 Checkpoints and exports are written under `out/` (ignored by Git by default).
 
 ### CLI inference
@@ -85,6 +105,11 @@ npm run stop:ui
 | :--- | :--- |
 | `train` | `node src/train.js` |
 | `train:fun` | `FUN_TRAIN=1 node src/train.js` |
+| `train:mega` | `MEGA_TRAIN=1 node src/train.js` (very long preset) |
+| `train:ultimate` | `ULTIMATE_TRAIN=1` + Adam + cosine LR (default 5000 steps) |
+| `train:ultimate:long` | Same with `STEPS=20000` and `LR_WARMUP=2000` (long run) |
+| `corpus:fetch` | Fetch web sources → `data/corpus/downloaded_mixed_zh.txt` |
+| `export:all` | Re-export checkpoints to multiple paths (see script) |
 | `build` | Alias for `train` |
 | `infer` / `chat` | `node src/infer.js` (pass model path and flags) |
 | `ui` | `node src/chatServer.js` |
@@ -102,6 +127,19 @@ npm run stop:ui
 | :--- | :--- |
 | `CORPUS_PATH` | Corpus file path (default: `data/corpus/playful_zh.txt`) |
 | `FUN_TRAIN` | Set to `1` to apply `funTrainingPreset` in `src/config.js` |
+| `MEGA_TRAIN` | Set to `1` to apply `megaTrainingPreset` (more steps; wins over `FUN_TRAIN` if both set) |
+| `ULTIMATE_TRAIN` | Set to `1` to apply `ultimateTrainingPreset` (large model; wins over MEGA / FUN) |
+| `OPTIMIZER` | `adam` for Adam; otherwise SGD |
+| `COSINE_LR` | `1` for cosine decay of learning rate over the run |
+| `LR_WARMUP` | If set to a positive integer, linearly ramp LR from 0 to the configured peak over that many steps first (then cosine if `COSINE_LR=1`, else constant) |
+| `RESUME_FROM` / `LOAD_CHECKPOINT` | Path to a `.mgpt.json` checkpoint to continue training (must match current corpus vocabulary and architecture) |
+| `STEP_OFFSET` | Global steps already completed before this run (for LR schedule when resuming; default `0`) |
+| `TOTAL_STEPS` | Optional; LR schedule length is `max(STEPS + STEP_OFFSET, TOTAL_STEPS)` when `TOTAL_STEPS` is set |
+| `CHECKPOINT_EVERY` | If set to a positive integer, write `checkpoint-step-*.mgpt.json` and `latest.mgpt.json` under `CHECKPOINT_DIR` every that many **global** steps; `0` disables |
+| `CHECKPOINT_DIR` | Checkpoint directory (default `./out/checkpoints`) |
+| `EARLY_STOP_PATIENCE` | With a validation set, stop early after this many **log intervals** without `val_loss` improvement; `0` disables (Adam state is not restored from checkpoints) |
+| `SKIP_DOWNLOAD_CORPUS` | Set to `1` to skip merging `data/corpus/downloaded_mixed_zh.txt` |
+| `DOWNLOAD_CORPUS_PATH` | Path to downloaded mix (default `data/corpus/downloaded_mixed_zh.txt`) |
 | `STEPS` | Positive integer; overrides training step count |
 | `SKIP_EXPORT` | Set to `1` to skip writing export artifacts |
 | `EXPORT_DIR` | HF-style export directory (default under `out/export/hf-style`) |

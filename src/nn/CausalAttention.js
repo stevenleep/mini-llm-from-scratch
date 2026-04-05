@@ -69,14 +69,17 @@ import { Linear } from './Linear.js';
  * 每个头维度 headDim = dModel/nHeads，必须分得匀；否则切列会乱。
  */
 export class CausalAttention {
-  constructor(dModel, nHeads, rng) {
+  /**
+   * @param {{ loraRank?: number, loraAlpha?: number }} [loraOpts]
+   */
+  constructor(dModel, nHeads, rng, loraOpts = {}) {
     if (dModel % nHeads !== 0) throw new Error('dModel 必须整除 nHeads');
     this.nHeads = nHeads;
     this.headDim = dModel / nHeads;
     this.scale = 1 / Math.sqrt(this.headDim);
     /** 一次线性从 x 得到 [Q,K,V] 拼在最后一维，省三次单独矩阵乘（实现紧凑） */
-    this.qkv = new Linear(dModel, 3 * dModel, rng);
-    this.proj = new Linear(dModel, dModel, rng);
+    this.qkv = new Linear(dModel, 3 * dModel, rng, loraOpts);
+    this.proj = new Linear(dModel, dModel, rng, loraOpts);
     /**
      * 掩码只依赖序列长度 T；同长度可复用，少分配内存。
      * 若 T 变化（例如不同长度样本），要重建掩码。
@@ -120,5 +123,14 @@ export class CausalAttention {
 
   parameters() {
     return [...this.qkv.parameters(), ...this.proj.parameters()];
+  }
+
+  loraParameters() {
+    return [...this.qkv.loraParameters(), ...this.proj.loraParameters()];
+  }
+
+  freezeBaseForLoRA() {
+    this.qkv.freezeBaseForLoRA();
+    this.proj.freezeBaseForLoRA();
   }
 }

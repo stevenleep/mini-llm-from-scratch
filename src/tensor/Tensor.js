@@ -132,6 +132,14 @@ export class Tensor {
     return new Tensor(new Float32Array(prod(shape)), shape, requiresGrad);
   }
 
+  /** 全 1 表：LayerNorm 的 γ 初值常用。 */
+  static ones(shape, requiresGrad = false) {
+    const n = prod(shape);
+    const data = new Float32Array(n);
+    data.fill(1);
+    return new Tensor(data, shape, requiresGrad);
+  }
+
   /**
    * 随机填表当初始权重。
    * 【问题】全 0 会卡住；太大太小都不好。

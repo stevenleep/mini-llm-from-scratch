@@ -10,12 +10,18 @@
   "scripts": {
     "train": "node src/train.js",
     "train:fun": "FUN_TRAIN=1 node src/train.js",
+    "train:lora": "LORA_RANK=8 LORA_ONLY=1 node src/train.js",
     "build": "node src/train.js",
     "infer": "node src/infer.js",
     "chat": "node src/infer.js",
     "ui": "node src/chatServer.js",
     "stop:ui": "lsof -ti :3847 2>/dev/null | xargs kill -9 2>/dev/null || true",
     "restart:ui": "npm run stop:ui && node src/chatServer.js",
-    "gpu:smoke": "node scripts/tfjs-gpu-smoke.mjs"
+    "gpu:smoke": "node scripts/tfjs-gpu-smoke.mjs",
+    "export:all": "node scripts/export-all.mjs",
+    "corpus:fetch": "node scripts/fetch-corpora.mjs",
+    "train:mega": "MEGA_TRAIN=1 node src/train.js",
+    "train:ultimate": "ULTIMATE_TRAIN=1 OPTIMIZER=adam COSINE_LR=1 LR_WARMUP=500 node src/train.js",
+    "train:ultimate:long": "STEPS=20000 LR_WARMUP=2000 ULTIMATE_TRAIN=1 OPTIMIZER=adam COSINE_LR=1 node src/train.js"
   }
 }

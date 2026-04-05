@@ -1,2 +1,4 @@
 out/
+data/corpus/downloaded/
+data/corpus/downloaded_mixed_zh.txt
 node_modules/

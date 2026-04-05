@@ -34,9 +34,12 @@ import { Linear } from './Linear.js';
  * 常见做法是把中间层加宽（如 4 倍）；这里用较小数字只是让 CPU 跑得动。
  */
 export class FeedForward {
-  constructor(dModel, dFf, rng) {
-    this.fc1 = new Linear(dModel, dFf, rng);
-    this.fc2 = new Linear(dFf, dModel, rng);
+  /**
+   * @param {{ loraRank?: number, loraAlpha?: number }} [loraOpts]
+   */
+  constructor(dModel, dFf, rng, loraOpts = {}) {
+    this.fc1 = new Linear(dModel, dFf, rng, loraOpts);
+    this.fc2 = new Linear(dFf, dModel, rng, loraOpts);
   }
 
   forward(x) {
@@ -45,5 +48,14 @@ export class FeedForward {
 
   parameters() {
     return [...this.fc1.parameters(), ...this.fc2.parameters()];
+  }
+
+  loraParameters() {
+    return [...this.fc1.loraParameters(), ...this.fc2.loraParameters()];
+  }
+
+  freezeBaseForLoRA() {
+    this.fc1.freezeBaseForLoRA();
+    this.fc2.freezeBaseForLoRA();
   }
 }

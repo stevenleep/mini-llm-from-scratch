@@ -14,7 +14,7 @@
  */
 
 import { Tensor } from '../tensor/Tensor.js';
-import { addBias, matmul } from '../tensor/ops.js';
+import { add, addBias, matmul, mulScalar } from '../tensor/ops.js';
 
 /**
  * Linear（全连接层 / 仿射层）
@@ -38,18 +38,48 @@ export class Linear {
    * @param {number} inF  输入向量长度
    * @param {number} outF 输出向量长度
    * @param {() => number} rng 随机数，只用于初始化 W
+   * @param {{ loraRank?: number, loraAlpha?: number }} [loraOpts] LoRA：低秩适配 ΔW≈A@B，只训 A/B 时可冻结 weight/bias（见 train.js 的 LORA_ONLY）。
    */
-  constructor(inF, outF, rng) {
+  constructor(inF, outF, rng, loraOpts = {}) {
+    const { loraRank = 0, loraAlpha = 16 } = loraOpts;
+    this.loraRank = loraRank;
+    this.loraAlpha = loraAlpha;
     this.weight = Tensor.randn([inF, outF], rng, true);
     this.bias = Tensor.zeros([1, outF], true);
+    if (loraRank > 0) {
+      this.loraA = Tensor.randn([inF, loraRank], rng, true);
+      this.loraB = Tensor.zeros([loraRank, outF], true);
+    } else {
+      this.loraA = null;
+      this.loraB = null;
+    }
   }
 
   forward(x) {
-    return addBias(matmul(x, this.weight), this.bias);
+    const base = addBias(matmul(x, this.weight), this.bias);
+    if (!this.loraA || !this.loraB) return base;
+    const mid = matmul(x, this.loraA);
+    const delta = matmul(mid, this.loraB);
+    const scale = this.loraAlpha / this.loraRank;
+    return add(base, mulScalar(delta, scale));
+  }
+
+  /** 冻结全连接「主干」，只训 LoRA 时用。 */
+  freezeBaseForLoRA() {
+    this.weight.requiresGrad = false;
+    this.bias.requiresGrad = false;
+  }
+
+  baseParameters() {
+    return [this.weight, this.bias];
+  }
+
+  loraParameters() {
+    return this.loraA && this.loraB ? [this.loraA, this.loraB] : [];
   }
 
   /** 训练时收集所有要更新的参数，方便统一做一步梯度下降。 */
   parameters() {
-    return [this.weight, this.bias];
+    return [...this.baseParameters(), ...this.loraParameters()];
   }
 }

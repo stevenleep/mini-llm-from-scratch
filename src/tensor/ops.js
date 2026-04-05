@@ -514,3 +514,77 @@ export const crossEntropyMean = (logits, targets) => {
   };
   return L;
 };
+
+/**
+ * LayerNorm：在最后一维上按行归一化，再乘 γ、加 β。形状 x / gamma / beta 均为 [T, D]（gamma、beta 语义为 [1,D] 广播）。
+ * 用于 Transformer 里稳定每层的数值范围；与 Pre-LN 搭配：先 Norm 再子层，再残差。
+ */
+export const layerNorm = (x, gamma, beta, eps = 1e-5) => {
+  const [T, D] = x.shape;
+  if (gamma.shape[0] !== 1 || gamma.shape[1] !== D || beta.shape[0] !== 1 || beta.shape[1] !== D) {
+    throw new Error(`layerNorm: 期望 gamma/beta 为 [1, ${D}]`);
+  }
+  const out = new Float32Array(T * D);
+  const mean = new Float32Array(T);
+  const rstd = new Float32Array(T);
+  const xHat = new Float32Array(T * D);
+
+  for (let i = 0; i < T; i++) {
+    let m = 0;
+    for (let j = 0; j < D; j++) m += x.data[i * D + j];
+    m /= D;
+    mean[i] = m;
+    let v = 0;
+    for (let j = 0; j < D; j++) {
+      const d0 = x.data[i * D + j] - m;
+      v += d0 * d0;
+    }
+    v /= D;
+    const rs = 1 / Math.sqrt(v + eps);
+    rstd[i] = rs;
+    for (let j = 0; j < D; j++) {
+      const xh = (x.data[i * D + j] - m) * rs;
+      xHat[i * D + j] = xh;
+      out[i * D + j] = xh * gamma.data[j] + beta.data[j];
+    }
+  }
+
+  const requiresGrad = x.requiresGrad || gamma.requiresGrad || beta.requiresGrad;
+  const t = new Tensor(out, x.shape, requiresGrad);
+  t._prev = [x, gamma, beta];
+  t._backward = () => {
+    if (!t.grad) return;
+    if (gamma.requiresGrad) {
+      for (let j = 0; j < D; j++) {
+        let s = 0;
+        for (let i = 0; i < T; i++) s += t.grad[i * D + j] * xHat[i * D + j];
+        gamma.grad[j] += s;
+      }
+    }
+    if (beta.requiresGrad) {
+      for (let j = 0; j < D; j++) {
+        let s = 0;
+        for (let i = 0; i < T; i++) s += t.grad[i * D + j];
+        beta.grad[j] += s;
+      }
+    }
+    if (x.requiresGrad) {
+      for (let i = 0; i < T; i++) {
+        let sumDxhat = 0;
+        let sumXhatDxhat = 0;
+        for (let j = 0; j < D; j++) {
+          const dxhat = t.grad[i * D + j] * gamma.data[j];
+          sumDxhat += dxhat;
+          sumXhatDxhat += dxhat * xHat[i * D + j];
+        }
+        sumDxhat /= D;
+        sumXhatDxhat /= D;
+        for (let j = 0; j < D; j++) {
+          const dxhat = t.grad[i * D + j] * gamma.data[j];
+          x.grad[i * D + j] += rstd[i] * (dxhat - sumDxhat - xHat[i * D + j] * sumXhatDxhat);
+        }
+      }
+    }
+  };
+  return t;
+};

@@ -37,16 +37,45 @@ export const defaultConfig = {
   nLayers: 2,
   dFf: 128,
   lr: 0.02,
-  steps: 200,
+  steps: 600,
   seed: 42,
+  /** LoRA 秩；0 表示不用 LoRA（见环境变量 LORA_RANK） */
+  loraRank: 0,
+  loraAlpha: 16,
 };
 
 /**
  * 语料较长、想「多练一会」时用：环境变量 FUN_TRAIN=1 会与 defaultConfig 合并。
- * 步数更多、上下文更长、学习率略降，更稳一点。
+ * 步数更多、上下文更长、学习率略降，更稳一点（适合数据量变大后的默认训练）。
  */
 export const funTrainingPreset = {
   seqLen: 96,
-  lr: 0.016,
-  steps: 800,
+  lr: 0.014,
+  steps: 2800,
+};
+
+/**
+ * 数据量变大、想「练很久」时用：MEGA_TRAIN=1 与 defaultConfig 合并（步数多、学习率再略降）。
+ * 可与 FUN_TRAIN 二选一；若同时设 MEGA_TRAIN=1，以本预设为准。
+ */
+export const megaTrainingPreset = {
+  seqLen: 96,
+  lr: 0.011,
+  steps: 10000,
+};
+
+/**
+ * 尽力而为档：更大模型 + 更长上下文 + 较低学习率（建议配合 OPTIMIZER=adam）。
+ * 默认步数偏保守，避免 CPU 上跑太久；要更长可设环境变量 STEPS（例如 20000）。
+ * 环境变量 ULTIMATE_TRAIN=1 启用；优先于 MEGA / FUN。
+ * 训练明显更慢、导出更大，内存占用更高。
+ */
+export const ultimateTrainingPreset = {
+  seqLen: 128,
+  dModel: 128,
+  nHeads: 8,
+  nLayers: 4,
+  dFf: 512,
+  lr: 0.002,
+  steps: 5000,
 };

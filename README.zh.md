@@ -51,6 +51,26 @@ npm run train
 npm run train:fun
 ```
 
+更长训练（默认约 10000 步，见 `megaTrainingPreset`）：
+
+```bash
+npm run train:mega
+```
+
+**尽力而为档**（更大模型、更长上下文；默认 **5000 步**，见 `ultimateTrainingPreset`，默认 **Adam + 余弦学习率**，仍较慢、导出更大）：
+
+```bash
+npm run train:ultimate
+```
+
+等价于 `ULTIMATE_TRAIN=1 OPTIMIZER=adam COSINE_LR=1 LR_WARMUP=500 node src/train.js`（预热后余弦）。要更长：`STEPS=20000 npm run train:ultimate`。也可单独调 `LR_WARMUP` 或 `STEPS`。
+
+从网络拉取公开中文语料并合并到 `data/corpus/downloaded_mixed_zh.txt`（训练时自动拼到主语料后，除非 `SKIP_DOWNLOAD_CORPUS=1`）：
+
+```bash
+npm run corpus:fetch
+```
+
 产物写入 `out/`（默认被 Git 忽略）。
 
 ### 命令行推理
@@ -86,6 +106,11 @@ npm run stop:ui
 | :--- | :--- |
 | `train` | `node src/train.js` |
 | `train:fun` | `FUN_TRAIN=1 node src/train.js` |
+| `train:mega` | `MEGA_TRAIN=1 node src/train.js`（超长步数预设） |
+| `train:ultimate` | `ULTIMATE_TRAIN=1` + Adam + 余弦 LR（默认 5000 步） |
+| `train:ultimate:long` | 同上但 `STEPS=20000`、`LR_WARMUP=2000`（长跑） |
+| `corpus:fetch` | 下载并生成 `data/corpus/downloaded_mixed_zh.txt` |
+| `export:all` | 从已有 checkpoint 写出多路径导出（见脚本注释） |
 | `build` | 与 `train` 相同 |
 | `infer` / `chat` | `node src/infer.js`（传入模型路径与参数） |
 | `ui` | `node src/chatServer.js` |
@@ -103,6 +128,19 @@ npm run stop:ui
 | :--- | :--- |
 | `CORPUS_PATH` | 语料文件路径（默认 `data/corpus/playful_zh.txt`） |
 | `FUN_TRAIN` | 设为 `1` 时合并 `funTrainingPreset`（`src/config.js`） |
+| `MEGA_TRAIN` | 设为 `1` 时合并 `megaTrainingPreset`（步数更多；与 `FUN_TRAIN` 同时设时以本项为准） |
+| `ULTIMATE_TRAIN` | 设为 `1` 时合并 `ultimateTrainingPreset`（大模型；优先于 MEGA / FUN） |
+| `OPTIMIZER` | `adam` 使用 Adam，否则 SGD |
+| `COSINE_LR` | `1` 时按训练进度余弦衰减学习率 |
+| `LR_WARMUP` | 正整数：前若干步学习率从 0 线性升到峰值，再进入余弦（若 `COSINE_LR=1`）或保持常数 lr；`0` 关闭 |
+| `RESUME_FROM` / `LOAD_CHECKPOINT` | 指向 `.mgpt.json`：加载权重续训（须与当前语料词表、结构一致） |
+| `STEP_OFFSET` | 已完成的**全局**训练步数；续训时与余弦/预热对齐（默认 `0`） |
+| `TOTAL_STEPS` | 可选；与 `max(本段步数+STEP_OFFSET, TOTAL_STEPS)` 作为学习率调度总长 |
+| `CHECKPOINT_EVERY` | 正整数：每多少**全局步**写入 `CHECKPOINT_DIR` 下的 `checkpoint-step-*.mgpt.json` 与 `latest.mgpt.json`；`0` 关闭 |
+| `CHECKPOINT_DIR` | checkpoint 目录（默认 `./out/checkpoints`） |
+| `EARLY_STOP_PATIENCE` | 有验证集时，连续多少次**打日志** `val_loss` 未刷新最优则提前结束；`0` 关闭（续训用 Adam 时动量不会从文件恢复） |
+| `SKIP_DOWNLOAD_CORPUS` | `1` 时不合并 `data/corpus/downloaded_mixed_zh.txt` |
+| `DOWNLOAD_CORPUS_PATH` | 网络混合语料路径（默认 `data/corpus/downloaded_mixed_zh.txt`） |
 | `STEPS` | 正整数，覆盖训练总步数 |
 | `SKIP_EXPORT` | `1` 时不写出导出文件 |
 | `EXPORT_DIR` | HF 风格导出目录（默认 `out/export/hf-style` 一带） |

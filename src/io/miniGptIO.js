@@ -14,7 +14,8 @@ import { tokenizerFromItos } from '../data/charTokenizer.js';
 import { MiniGPT, mulberry32 } from '../model/MiniGPT.js';
 import { prod } from '../tensor/size.js';
 
-const FORMAT_VERSION = 1;
+/** 1 = 仅主干权重；2 = config 含 loraRank / loraAlpha，权重序列含 LoRA 矩阵（若秩>0）。 */
+const FORMAT_VERSION = 2;
 
 /** 一张 Tensor → JSON 里能存的一小块：形状 + Base64（里面是 float32 原始字节）。 */
 const tensorToWeightEntry = (t) => ({
@@ -51,6 +52,8 @@ export const serializeMiniGPT = (model, cfg, tok) => {
       nHeads: cfg.nHeads,
       nLayers: cfg.nLayers,
       dFf: cfg.dFf,
+      loraRank: cfg.loraRank ?? 0,
+      loraAlpha: cfg.loraAlpha ?? 16,
     },
     itos: tok.itos,
     weights: params.map((t) => tensorToWeightEntry(t)),
@@ -61,7 +64,8 @@ export const serializeMiniGPT = (model, cfg, tok) => {
  * 把上面那种对象读回来：先对版本号和词表长度做检查，再 new 模型，按顺序把每张表填满。
  */
 export const deserializeMiniGPT = (payload) => {
-  if (payload.formatVersion !== FORMAT_VERSION) {
+  const fv = payload.formatVersion;
+  if (fv !== 1 && fv !== 2) {
     throw new Error(`不认识 formatVersion: ${payload.formatVersion}`);
   }
   const { config, itos, weights } = payload;
@@ -78,6 +82,8 @@ export const deserializeMiniGPT = (payload) => {
     nHeads: config.nHeads,
     nLayers: config.nLayers,
     dFf: config.dFf,
+    loraRank: fv >= 2 ? config.loraRank ?? 0 : 0,
+    loraAlpha: fv >= 2 ? config.loraAlpha ?? 16 : 16,
   };
   const tok = tokenizerFromItos(itos);
   const model = new MiniGPT(cfg, mulberry32(0));

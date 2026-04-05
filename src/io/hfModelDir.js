@@ -27,24 +27,33 @@ import { decodeSafetensors, encodeSafetensors } from './safetensors.js';
 /**
  * 把内存里的模型拆成「字符串名字 → 那张 Tensor」，方便按名字写进 safetensors。
  */
+/** @param {import('../nn/Linear.js').Linear} lin */
+const addLinearToDict = (d, prefix, lin) => {
+  d[`${prefix}.weight`] = lin.weight;
+  d[`${prefix}.bias`] = lin.bias;
+  if (lin.loraA && lin.loraB) {
+    d[`${prefix}.lora_a`] = lin.loraA;
+    d[`${prefix}.lora_b`] = lin.loraB;
+  }
+};
+
 export const collectNamedStateDict = (model) => {
   /** @type {Record<string, import('../tensor/Tensor.js').Tensor>} */
   const d = {};
   d['transformer.wte.weight'] = model.tokEmb;
   d['transformer.wpe.weight'] = model.posEmb;
-  d['lm_head.weight'] = model.lmHead.weight;
-  d['lm_head.bias'] = model.lmHead.bias;
+  addLinearToDict(d, 'lm_head', model.lmHead);
   for (let i = 0; i < model.blocks.length; i++) {
     const b = model.blocks[i];
     const p = `transformer.h.${i}`;
-    d[`${p}.attn.c_attn.weight`] = b.attn.qkv.weight;
-    d[`${p}.attn.c_attn.bias`] = b.attn.qkv.bias;
-    d[`${p}.attn.c_proj.weight`] = b.attn.proj.weight;
-    d[`${p}.attn.c_proj.bias`] = b.attn.proj.bias;
-    d[`${p}.mlp.c_fc.weight`] = b.ff.fc1.weight;
-    d[`${p}.mlp.c_fc.bias`] = b.ff.fc1.bias;
-    d[`${p}.mlp.c_proj.weight`] = b.ff.fc2.weight;
-    d[`${p}.mlp.c_proj.bias`] = b.ff.fc2.bias;
+    d[`${p}.ln_1.weight`] = b.ln1.gamma;
+    d[`${p}.ln_1.bias`] = b.ln1.beta;
+    d[`${p}.ln_2.weight`] = b.ln2.gamma;
+    d[`${p}.ln_2.bias`] = b.ln2.beta;
+    addLinearToDict(d, `${p}.attn.c_attn`, b.attn.qkv);
+    addLinearToDict(d, `${p}.attn.c_proj`, b.attn.proj);
+    addLinearToDict(d, `${p}.mlp.c_fc`, b.ff.fc1);
+    addLinearToDict(d, `${p}.mlp.c_proj`, b.ff.fc2);
   }
   return d;
 };
@@ -83,6 +92,8 @@ export const hfConfigFromTraining = (cfg) => ({
   n_head: cfg.nHeads,
   n_inner: cfg.dFf,
   torch_dtype: 'float32',
+  lora_rank: cfg.loraRank ?? 0,
+  lora_alpha: cfg.loraAlpha ?? 16,
 });
 
 /** 把 config.json 读出来的对象再变回我们代码里用的 cfg（驼峰那一套）。 */
@@ -93,6 +104,8 @@ export const trainingConfigFromHf = (hfc) => ({
   nLayers: hfc.n_layer,
   nHeads: hfc.n_head,
   dFf: hfc.n_inner,
+  loraRank: hfc.lora_rank ?? 0,
+  loraAlpha: hfc.lora_alpha ?? 16,
 });
 
 /**
